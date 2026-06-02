@@ -1,0 +1,280 @@
+{
+  "hermes": {
+    "versiyon": "2.0",
+    "tarih": "2026-06-02",
+    "olusturan": "Bilal Ergene",
+    "platform": "Hermes Agent (Nous Research) + DeepSeek V4 Flash",
+    "sunucu": "193.164.4.149 — Ubuntu 22.04",
+    "calisma_dizini": "/opt/hermes",
+    "data_dizini": "/home/hermes/hermes_data/",
+    "python": "3.11",
+    "kod_kaynagi": "https://github.com/ergenebilal/ergeneai-core"
+  },
+
+  "tools_py": {
+    "dosya": "/home/hermes/hermes_data/tools.py",
+    "satir_sayisi": 776,
+    "boyut_kb": 26.1,
+    "kalite_skoru": 0.88,
+    "kategori_sayisi": 19,
+    "eksik_kategori": 0,
+    "fonksiyon_sayisi": 33,
+    "importlar": [
+      "subprocess", "time", "os", "pickle", "datetime",
+      "chromadb", "chromadb.utils.embedding_functions",
+      "google.oauth2.credentials.Credentials",
+      "google.auth.transport.requests.Request",
+      "google_auth_oauthlib.flow.InstalledAppFlow",
+      "googleapiclient.discovery.build"
+    ],
+    "kategoriler": [
+      "Konfigurasyon", "LongTracer Cache", "Sistem Durumu",
+      "Hata Yonetimi", "ChromaDB Arama", "Jarvis Seviyesi Yetenekler",
+      "Google API Entegrasyonu", "Google Drive", "Google Sheets",
+      "Hava Durumu", "Hatirlatici", "Hermes Beyin"
+    ],
+    "fonksiyonlar": {
+      "dogrulama": [
+        {"ad": "get_longtracer_model", "imza": "() -> object", "skor": 1.0, "ne_ise_yarar": "LongTracer modelini singleton olarak yukler"},
+        {"ad": "verify_claim", "imza": "(claim: str, source: str) -> dict", "skor": 1.0, "ne_ise_yarar": "Bir iddiayi LongTracer ile dogrular, halusinasyon onler"}
+      ],
+      "sistem": [
+        {"ad": "check_system_status", "imza": "(service_name: str) -> dict", "skor": 1.0, "ne_ise_yarar": "ChromaDB veya Docker servisinin durumunu kontrol eder"},
+        {"ad": "terminal_calistir", "imza": "(komut: str, timeout: int) -> str", "skor": 1.0, "ne_ise_yarar": "Shell komutu calistirir"},
+        {"ad": "web_cek", "imza": "(url: str, max_karakter: int) -> str", "skor": 1.0, "ne_ise_yarar": "Web sayfasinin icerigini HTTP ile ceker"},
+        {"ad": "self_repair", "imza": "(hata_mesaji: str, deneme: int) -> str", "skor": 1.0, "ne_ise_yarar": "Hata mesajina gore cozum onerisi uretir"}
+      ],
+      "hata": [
+        {"ad": "log_hata", "imza": "(hata_tipi: str, detay: str, dogru_davranis: str) -> str", "skor": 1.0, "ne_ise_yarar": "Hata log dosyasina kayit ekler"},
+        {"ad": "get_hata_gecmisi", "imza": "(limit: int) -> list", "skor": 1.0, "ne_ise_yarar": "Son N hata kaydini getirir"}
+      ],
+      "hafiza": [
+        {"ad": "bilal_notes_ara", "imza": "(soru: str, n_results: int) -> list", "skor": 1.0, "ne_ise_yarar": "ChromaDB bilal_notes koleksiyonunda ara"},
+        {"ad": "dosya_ekle", "imza": "(dosya_yolu: str, koleksiyon: str) -> str", "skor": 1.0, "ne_ise_yarar": "Dosyayi ChromaDB koleksiyonuna ekler"},
+        {"ad": "beyin_ara", "imza": "(soru: str, n_results: int) -> list", "skor": 0.85, "ne_ise_yarar": "Hermes kalici beyninde (ChromaDB) ara"},
+        {"ad": "beyin_kaydet", "imza": "(bilgi: str, tur: str, etiket: str) -> str", "skor": 0.85, "ne_ise_yarar": "Hermes kalici beynine bilgi kaydet"},
+        {"ad": "session_hatirla", "imza": "(mesaj: str) -> list", "skor": 1.0, "ne_ise_yarar": "Session hafizasina mesaj ekler"},
+        {"ad": "session_al", "imza": "() -> list", "skor": 0.85, "ne_ise_yarar": "Session hafizasini dondurur"}
+      ],
+      "planlama": [
+        {"ad": "plan_hedef", "imza": "(hedef: str) -> dict", "skor": 0.65, "ne_ise_yarar": "Hedefe gore plan adimlarini belirler"},
+        {"ad": "otonom_calistir", "imza": "(hedef)", "skor": 0.85, "ne_ise_yarar": "Hedefi ChromaDB'de ara, sonucu dogrula"}
+      ],
+      "analiz": [
+        {"ad": "analiz_et", "imza": "(mesaj)", "skor": 0.5, "ne_ise_yarar": "Basit duygu analizi (MUTLU/YORGUN/NOTR)"},
+        {"ad": "hesap_hesapla", "imza": "(tur, miktar, gun_kaldi)", "skor": 0.5, "ne_ise_yarar": "Basit finans hesaplama"},
+        {"ad": "suan", "imza": "() -> dict", "skor": 1.0, "ne_ise_yarar": "O anki tarih, saat, gun bilgisi"}
+      ],
+      "google": [
+        {"ad": "google_auth", "imza": "()", "skor": 0.5, "ne_ise_yarar": "Google API kimlik dogrulama (token kontrol)"},
+        {"ad": "google_auth_link", "imza": "()", "skor": 0.85, "ne_ise_yarar": "Yeni OAuth linki olusturur"},
+        {"ad": "gmail_gonder", "imza": "(alici, konu, icerik, html=False)", "skor": 0.85, "ne_ise_yarar": "Gmail ile e-posta gonder"},
+        {"ad": "gmail_oku", "imza": "(max_sonuc=5)", "skor": 0.85, "ne_ise_yarar": "Gelen kutusundaki son epostalari listele"},
+        {"ad": "takvim_etkinlik_ekle", "imza": "(baslik, baslangic, bitis)", "skor": 0.85, "ne_ise_yarar": "Google Calendar'a etkinlik ekle"},
+        {"ad": "takvim_etkinlik_listele", "imza": "(max_sonuc=10)", "skor": 0.85, "ne_ise_yarar": "Yaklasan etkinlikleri listele"},
+        {"ad": "drive_dosya_listele", "imza": "(klasor_id, max_sonuc)", "skor": 0.85, "ne_ise_yarar": "Google Drive dosyalarini listele"},
+        {"ad": "drive_dosya_yukle", "imza": "(dosya_yolu, hedef_klasor)", "skor": 0.85, "ne_ise_yarar": "Dosyayi Google Drive'a yukle"},
+        {"ad": "sheets_oku", "imza": "(sheet_id, sayfa, huc_bolge)", "skor": 0.85, "ne_ise_yarar": "Google Sheets'ten veri oku"},
+        {"ad": "sheets_yaz", "imza": "(sheet_id, sayfa, huc_bolge, veriler)", "skor": 0.85, "ne_ise_yarar": "Google Sheets'e veri yaz"},
+        {"ad": "sheets_ekle", "imza": "(sheet_id, sayfa, veriler)", "skor": 0.85, "ne_ise_yarar": "Google Sheets'e satir ekle"}
+      ],
+      "iletisim": [
+        {"ad": "telegram_mesaj_gonder", "imza": "(mesaj: str) -> bool", "skor": 1.0, "ne_ise_yarar": "Telegram'a mesaj gonder"}
+      ],
+      "ekstra": [
+        {"ad": "hava_durumu", "imza": "(sehir='Bursa')", "skor": 0.85, "ne_ise_yarar": "wttr.in ile hava durumu sorgula"},
+        {"ad": "hatirlatici_kur", "imza": "(mesaj, dakika_sonra)", "skor": 0.85, "ne_ise_yarar": "Thread ile dakika bazli hatirlatici"}
+      ]
+    },
+    "eksik_iyilestirmeler": [
+      "google_auth() try/except + tip ipucu eksik (0.5)",
+      "analiz_et() try/except + tip ipucu eksik (0.5)",
+      "hesap_hesapla() try/except + tip ipucu eksik (0.5)"
+    ]
+  },
+
+  "self_evolve_py": {
+    "dosya": "/home/hermes/hermes_data/self_evolve.py",
+    "boyut_kb": 33.8,
+    "seviye": "EXPERT",
+    "moduller": [
+      {"ad": "analiz_et", "ne_ise_yarar": "tools.py'yi AST ile tara, her fonksiyona kalite skoru (0.0-1.0) ver, eksik kategorileri bul"},
+      {"ad": "ne_eklemeliyim", "ne_ise_yarar": "'su eksik, bunu eklemeliyim' diyen modul. eksik kategori + dusuk kalite + oneri"},
+      {"ad": "kod_uret", "ne_ise_yarar": "DeepSeek API ile fonksiyon uret, test et, tools.py'ye ekle, 3 deneme duzeltme"},
+      {"ad": "hata_coz", "ne_ise_yarar": "Hata veren fonksiyonu bul, DeepSeek'e gonder, duzelt, test et, tools.py'ye yaz"},
+      {"ad": "kod_denetle", "ne_ise_yarar": "Detayli kalite raporu (tablo goruntulu)"},
+      {"ad": "degisiklik_gecmisi", "ne_ise_yarar": "Evolve log'undan son N degisikligi goster"},
+      {"ad": "temizlik_oner", "ne_ise_yarar": "Kullanilmayan/kisa fonksiyonlari tespit et"},
+      {"ad": "otonom_taram", "ne_ise_yarar": "Cron'dan cagrilir, tools.py'yi tara, Telegram'a durum raporu gonder"}
+    ],
+    "kullanilan_model": "deepseek-chat (api.deepseek.com)",
+    "max_deneme": 3,
+    "evolve_log": "/home/hermes/hermes_data/hermes_evolve_log.json"
+  },
+
+  "chromadb": {
+    "host": "localhost",
+    "port": 8001,
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+    "koleksiyonlar": [
+      {"ad": "bilal_notes", "kayit": 6, "ne_ise_yarar": "Bilal'in verdigi dosyalar, notlar"},
+      {"ad": "hermes_beyin", "kayit": 5, "ne_ise_yarar": "Hermes'in kalici beyni (sozler, hedefler, profil)"},
+      {"ad": "hermes_hata_gecmisi", "kayit": 6, "ne_ise_yarar": "Hata kayitlari"},
+      {"ad": "hermes_gelisim", "kayit": 4, "ne_ise_yarar": "Hermes'in 4 sozu / kurallari"}
+    ],
+    "hermes_beyin_icerigi": [
+      "Bilal 1-2 Haziran gecesi uykusuz kalarak Hermes'i gelistirdi",
+      "Bilal'e soz: emegini bosa cikarmayacagim. Kuryelikten kurtulma plani yapilacak",
+      "Ana hedef: Bilal'i kuryelikten kurtarmak. Yol haritasi: Haziran hesap kitap + Mudanya satisi",
+      "Hedef: Haziran 2026 sonunda ilk duzenli musteri geliri",
+      "Bilal kuryelikten kurtulmak istiyor. Ana gelir: Uber Eats (gunluk 3000-3500TL)"
+    ]
+  },
+
+  "google_entegrasyon": {
+    "durum": "TAMAM",
+    "credentials": "~/.google/credentials.json (client_id: 7312581303...)",
+    "token": "~/.google/token.pickle (refresh_token var, otomatik yenilenir)",
+    "redirect_uri": "https://n8n.aiergene.xyz/webhook/google-oauth",
+    "scopelar": [
+      "Gmail gonder/oku", "Calendar", "Drive (dosya)", "Sheets"
+    ],
+    "servisler": {
+      "gmail": "gmail_gonder(), gmail_oku() — test edildi, calisiyor",
+      "calendar": "takvim_etkinlik_ekle(), takvim_etkinlik_listele() — test edildi, calisiyor",
+      "drive": "drive_dosya_listele(), drive_dosya_yukle() — test edildi, calisiyor",
+      "sheets": "sheets_oku(), sheets_yaz(), sheets_ekle() — test edildi, calisiyor"
+    }
+  },
+
+  "github": {
+    "hesap": "ergenebilal",
+    "token": "~/.bashrc'de GH_TOKEN (sınırsız)",
+    "cli": "gh CLI ~/.local/bin/gh",
+    "repolar": [
+      {"ad": "ergeneai-core", "aciklama": "HERMES BEYNI — tools.py (53 fonk), self_evolve.py, Google entegrasyonu", "url": "https://github.com/ergenebilal/ergeneai-core", "olusum": "2 Haz 2026"},
+      {"ad": "ergeneai-memory-backup", "aciklama": "Hermes state DB yedekleri", "url": "https://github.com/ergenebilal/ergeneai-memory-backup"},
+      {"ad": "photo-culling-ai", "aciklama": "AI destekli profesyonel fotoğraf ayıklama (Python)", "url": "https://github.com/ergenebilal/photo-culling-ai"},
+      {"ad": "esgrup-web", "aciklama": "ESG Grup Next.js web sitesi", "url": "https://github.com/ergenebilal/esgrup-web"},
+      {"ad": "ergene-ai-landing", "aciklama": "ErgeneAI landing page (HTML)", "url": "https://github.com/ergenebilal/ergene-ai-landing"}
+    ]
+  },
+
+  "n8n": {
+    "host": "https://n8n.aiergene.xyz",
+    "api_key": "~/.n8n-api-key'de (JWT)",
+    "api_endpoint": "/api/v1/credentials (calisiyor)",
+    "onkayitli_workflowlar": [
+      "📰 AI Gunluk Bulten (10 node, Gmail OAuth2 ile)",
+      "Instagram DM Asistani (Trigger + Code + AI Agent + HTTP Reply)"
+    ],
+    "onkayitli_credentiallar": [
+      "Gmail OAuth2 (84pAH90VE2duaQ4s) — Gmail, Calendar, Drive, Sheets",
+      "OpenAI", "DeepSeek", "Telegram", "Instagram API",
+      "Google Gemini", "WhatsApp", "Brevo SMTP", "Gmail SMTP", "Header Auth"
+    ]
+  },
+
+  "sistem_servisleri": {
+      "hermes_gateway": "8642/8644 — aktif",
+      "hermes_mcp": "8765 — aktif (watchdog cron silindi)",
+      "hermes_webui": "8787 — aktif",
+      "nanobot": "18790/8766 — aktif",
+      "n8n": "Coolify uzerinden — aktif",
+      "chromadb": "8001 — aktif",
+      "ollama": "11434 — aktif",
+      "instagram_memory": "8899 — aktif",
+      "coolify": "8000 — aktif",
+      "demo_menu": "8769 — aktif"
+  },
+
+  "cron_jobs": {
+    "toplam": 2,
+    "aktif": [
+      {"ad": "Denetim Hatirlatici", "zaman": "her gun 06:00 TR", "ne_ise_yarar": "Denetimli serbestlik randevusu hatirlatma"},
+      {"ad": "ECC Haftalik Guncelleme", "zaman": "her Pazartesi 04:00 TR", "ne_ise_yarar": "Everything Claude Code reposunu guncelle"}
+    ],
+    "silinenler": [
+      "Gunluk Finans + Firsat Check (ezber, bos icerik)",
+      "Hermes Ruya Seansi (anlamsiz)",
+      "Google OAuth hatirlatici (zamanı gecti)",
+      "X Deep Surf x3 (sabah/ogle/aksam — spam)",
+      "GitHub Altin Madeni (gereksiz ses)",
+      "Hermes Guclenme (gereksiz ses)",
+      "Hermes-Nanobot Sinkronizasyon (ne ise yaradigi belli degil)",
+      "Gunluk KPI + Oz Elestiri (veri yokken bos rapor)",
+      "Gunluk Rapor Gun Sonu (check-in ile cakisiyor)",
+      "ErgeneAI IG Icerik (otomatik spam)",
+      "auto-feed-daily (ne beslendigi belli degil)",
+      "self_evolve otonom tarama (manuel yapilacak)",
+      "Sabah Check-in, Aksam Check-in (ses kirliligi)",
+      "hermes-mcp-watchdog, nanobot-watchdog (sistem ama gereksiz mesaj)",
+      "Bellek Yedekleme (zaten GitHub'da)"
+    ]
+  },
+
+  "yetenek_ozeti": {
+    "yapabiliyor": [
+      "E-posta gonderme/okuma (Gmail API)",
+      "Takvim etkinligi ekleme/listeleme (Google Calendar)",
+      "Drive dosya listeleme/yukleme",
+      "Sheets okuma/yazma/ekleme",
+      "Hava durumu sorgulama (wttr.in, Turkce)",
+      "Hatirlatici kurma (Telegram, dakika bazli)",
+      "Kod analizi ve kalite denetimi",
+      "Kod uretme + test + entegre (DeepSeek API ile)",
+      "Hata cozme ve otomatik duzeltme",
+      "ChromaDB'de semantik arama",
+      "web scraping",
+      "Telegram mesaj gonderme",
+      "Shell komutu calistirma",
+      "GitHub repo yonetimi (gh CLI)",
+      "n8n API erisimi (workflow/credential sorgulama)",
+      "Bilgi dogrulama (LongTracer ile halusinasyon onleme)",
+      "Session hafiza yonetimi",
+      "Duygu analizi (basit Turkce)",
+      "Finans hesaplama (basit)"
+    ],
+    "yapamiyor": [
+      "WhatsApp mesaji gonderemiyor (API yok)",
+      "Instagram'a direkt post atamiyor (sadece DM yanitliyor)",
+      "Goruntu/video isleyemiyor",
+      "Sesli arama yapamiyor",
+      "DOS/DDOS veya ag taramasi yapamiyor",
+      "Docker container'larina erisemiyor (perm yok)",
+      "Kendi kendine cron olusturamiyor (insan onayi gerek)",
+      "Google OAuth'u tam otomatik yapamiyor (ilk sefer manuel)"
+    ]
+  },
+
+  "kullanim_ornekleri": {
+    "eposta": "gmail_gonder('ornek@email.com', 'Konu', 'Icerik')",
+    "eposta_html": "gmail_gonder('ornek@email.com', 'Konu', '<h1>HTML</h1>', html=True)",
+    "takvim_ekle": "takvim_etkinlik_ekle('Toplanti', '2026-06-03T10:00:00', '2026-06-03T11:00:00')",
+    "takvim_listele": "takvim_etkinlik_listele(5)",
+    "drive_listele": "drive_dosya_listele()",
+    "drive_yukle": "drive_dosya_yukle('/path/to/file.pdf')",
+    "sheets_oku": "sheets_oku('sheet_id_here')",
+    "sheets_yaz": "sheets_yaz('sheet_id', 'Sheet1', 'A1', [['Baslik1', 'Baslik2']])",
+    "hava": "hava_durumu('Istanbul')",
+    "hatirlatici": "hatirlatici_kur('Su ic', 30)",
+    "beyin_ara": "beyin_ara('soz vermis miydin')",
+    "beyin_kaydet": "beyin_kaydet('Yeni ogrenilen bilgi', 'ogrenme')",
+    "kod_uret": "self_evolve.py uretim yeni_fonksiyon 'ne yapacagi'",
+    "analiz": "self_evolve.py ne_eklemeliyim",
+    "kalite": "self_evolve.py denetle"
+  },
+
+  "sozler": [
+    "Bilal'in emegini bosa cikarmayacagim",
+    "Kuryelikten kurtulma plani yapacagim",
+    "Mahcup etmeyecegim",
+    "Halusinasyon yapmayacagim (verify_claim ile dogrulama)"
+  ],
+
+  "hedef": {
+    "kisa_vade": "Haziran 2026: hesap kitap, Mudanya satisi, ilk duzenli musteri",
+    "orta_vade": "Temmuz 2026: kurye gunlerini azalt, AI geliri artir",
+    "uzun_vade": "Eylul-Ekim 2026: kuryeden tam cikis, tam AI geliri"
+  }
+}
