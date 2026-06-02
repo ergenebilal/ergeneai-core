@@ -860,6 +860,61 @@ def pg_son(limit: int = 5) -> list:
         return results
     except Exception as e:
         return [f"PG sorgu hatasi: {str(e)}"]
+
+
+def pg_proaktif_analiz() -> dict:
+    """Proaktif sabah brifingi icin PG hafizasini analiz eder.
+
+    Son 48 saatteki tech_note ve business_strategy kayitlarini ceker,
+    Ollama (qwen2.5:3b) ile analiz edip 3 maddelik ozet cikarir.
+    """
+    import datetime
+    try:
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT content, category, created_at FROM hermes_memory "
+                "WHERE category IN ('tech_note', 'business_strategy') "
+                "AND created_at > NOW() - INTERVAL '48 hours' "
+                "ORDER BY created_at DESC"
+            )
+            records = cur.fetchall()
+        conn.close()
+
+        if not records:
+            return {"ozet": "Son 48 saatte analiz edilecek stratejik kayit bulunamadi.", "kayit_sayisi": 0}
+
+        kayit_metni = "\n".join([f"[{r[1]}] {str(r[2])[:10]}: {r[0][:300]}" for r in records])
+
+        import ollama
+        prompt = f"""Sen Hermes proaktif analiz motorusun. Asagidaki son 48 saatte kaydedilmis notlari analiz et ve Bilal icin TURKCE olarak 3 bolumlu bir ozet cikar:
+
+1. BU GUNUN ODAK NOKTASI (En kritik 1-2 madde)
+2. FIRSATLAR (Kaldiraca donusturulebilecek girdiler)
+3. OPERASYONEL RISKLER (Aksiyon gerektiren tehditler)
+
+NOTLAR:
+{kayit_metni}
+
+CEVAP FORMATI (TURKCE):
+**Gunun Odak Noktasi**
+- ...
+
+**Firsatlar**
+- ...
+
+**Operasyonel Riskler**
+- ..."""
+
+        response = ollama.chat(
+            model='qwen2.5:3b',
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0.3, 'num_predict': 500}
+        )
+
+        return {"ozet": response['message']['content'].strip(), "kayit_sayisi": len(records)}
+    except Exception as e:
+        return {"ozet": f"Analiz hatasi: {str(e)}", "kayit_sayisi": 0, "hata": str(e)}
 def beyin_ara(soru: str, n_results: int = 5) -> list:
     """Hermes'in kalici beyninde (ChromaDB) arama yapar.
     
