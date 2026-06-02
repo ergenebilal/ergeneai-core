@@ -706,7 +706,77 @@ def hatirlatici_kur(mesaj, dakika_sonra):
         return f"❌ Hatirlatici hatasi: {str(e)}"
 
 
-# === HERMES BEYİN (ChromaDB Kalıcı Hafıza) ===
+# === POSTGRESQL İKİNCİ BEYİN ===
+PG_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "ergeneai",
+    "user": "hermes",
+    "password": "hermes_2026"
+}
+
+def pg_baglan():
+    """PostgreSQL baglantisi acar."""
+    import psycopg2
+    return psycopg2.connect(**PG_CONFIG)
+
+
+def pg_kaydet(content: str, category: str = "genel") -> str:
+    """Hermes ikinci beynine bilgi kaydeder (henuz embedding yok).
+    content: Kaydedilecek bilgi
+    category: Kategori (tech_note, business_strategy, personal_reminder, genel)
+    """
+    try:
+        conn = pg_baglan()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO hermes_memory (content, category) VALUES (%s, %s)",
+            (content, category)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return f"✅ PG beyne kaydedildi ({category})"
+    except Exception as e:
+        return f"❌ PG kayit hatasi: {str(e)}"
+
+
+def pg_ara(search_text: str, limit: int = 5) -> list:
+    """Hermes ikinci beyninde metin bazli arama yapar.
+    search_text: Aranacak metin
+    limit: Kac sonuc
+    """
+    try:
+        conn = pg_baglan()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, content, category, created_at FROM hermes_memory "
+            "WHERE content ILIKE %s ORDER BY created_at DESC LIMIT %s",
+            (f"%{search_text}%", limit)
+        )
+        results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return results if results else ["PG beyinde eslesme bulunamadi"]
+    except Exception as e:
+        return [f"PG arama hatasi: {str(e)}"]
+
+
+def pg_son(limit: int = 5) -> list:
+    """Son eklenen kayitlari getirir."""
+    try:
+        conn = pg_baglan()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, content, category, created_at FROM hermes_memory "
+            "ORDER BY created_at DESC LIMIT %s", (limit,)
+        )
+        results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return results
+    except Exception as e:
+        return [f"PG sorgu hatasi: {str(e)}"]
 def beyin_ara(soru: str, n_results: int = 5) -> list:
     """Hermes'in kalici beyninde (ChromaDB) arama yapar.
     
@@ -775,3 +845,4 @@ print("   - drive_dosya_listele, drive_dosya_yukle")
 print("   - sheets_oku, sheets_yaz, sheets_ekle")
 print("   - hava_durumu, hatirlatici_kur")
 print("   - beyin_ara, beyin_kaydet")
+print("   - pg_kaydet, pg_ara, pg_son, pg_baglan")
