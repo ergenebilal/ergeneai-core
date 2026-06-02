@@ -1,0 +1,49 @@
+{
+  "tarih": "2026-06-02",
+  "genel_skor": 57,
+  "onceki_skor": null,
+  "degisim": null,
+  "hedef_skor": 85,
+  "kategoriler": {
+    "altyapi": {
+      "puan": 100,
+      "detay": "5/5 port acik (8642, 8644, 8767, 5432, 11434)",
+      "aciklama": "Tum kritik servisler ayakta. Eksik: watchdog cron gorulemiyor"
+    },
+    "hafiza": {
+      "puan": 36,
+      "detay": "9 kayit, 4 kategori (business_strategy:4, tech_note:3, genel:1, test:1)",
+      "aciklama": "Kayit var ama sayi cok az. Hedef: 100+ kayit. Kategori dagilimi dengesiz"
+    },
+    "embedding_daemon": {
+      "puan": 100,
+      "detay": "541s kesintisiz, model RAM'de sicak, 20ms",
+      "aciklama": "En saglam bilesen. Watchdog calisiyor"
+    },
+    "proaktif": {
+      "puan": 50,
+      "detay": "son 24h: 9 kayit, sabah brifing cron'u kurulu",
+      "aciklama": "Brifing cron'u var ama henuz calismadi (yarin 08:30 ilk). Proaktif hatirlatma yok"
+    },
+    "test_kalitesi": {
+      "puan": 0,
+      "detay": "57 fonksiyon, 0 test",
+      "aciklama": "EN ZAYIF HALKA. Hangi fonksiyon calisiyor bilinmiyor. Codex'in Faz 1'i burada baslamali"
+    },
+    "karar_motoru": {
+      "puan": 5,
+      "detay": "pg_proaktif_analiz var ama kullanilmiyor",
+      "aciklama": "Onceliklendirme, risk puanlamasi, karar agaci yok. Sadece duz mantik"
+    }
+  },
+  "tools_py": "57 fonksiyon, 0 test",
+  "diger": {
+    "n8n_workflow": "17 node, Switch + Embedding Daemon entegre, aktif",
+    "cron_aktif": "2 cron: sabah brifing (08:30 TR), watchdog (5dk)",
+    "github": "ergeneai-core, 6 commit (26a2fd1 son)",
+    "hafiza_kategorileri": ["genel", "business_strategy", "tech_note", "test"],
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2, 384 boyut"
+  },
+  "tahmin": "Bu hizla 3 gunde %65, 1 haftada %80. Test altyapisi eklenirse %90+."
+
+}

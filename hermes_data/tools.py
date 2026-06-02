@@ -1,0 +1,1274 @@
+import subprocess
+import time
+import os
+import pickle
+import datetime
+import chromadb
+from chromadb.utils import embedding_functions
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+
+# === KONFİGÜRASYON ===
+CHROMA_HOST = "localhost"
+CHROMA_PORT = 8001
+HATA_LOG = os.path.expanduser("~/hermes_hata_log.txt")
+
+# === LONGTRACER CACHE ===
+_longtracer_model = None
+
+def get_longtracer_model() -> object:
+    """LongTracer modelini singleton olarak yukler ve dondurur.
+    
+    Returns:
+        object: LongTracer model instance
+    
+    Ornek:
+        lt = get_longtracer_model()
+        result = lt.check(response="ornek", sources=["kaynak"])
+    """
+    global _longtracer_model
+    if _longtracer_model is None:
+        try:
+            import longtracer
+            _longtracer_model = longtracer
+        except ImportError:
+            _longtracer_model = None
+    return _longtracer_model
+
+
+def verify_claim(claim: str, source: str) -> dict:
+    """Bir iddiayi LongTracer ile dogrular.
+    
+    Args:
+        claim: Dogrulanacak iddia metni
+        source: Kaynak referansi
+    
+    Returns:
+        dict: {"verdict": "PASS"|"FAIL", "confidence": float|None}
+    """
+    try:
+        lt = get_longtracer_model()
+        if lt is None:
+            return {"verdict": "UNKNOWN", "confidence": None}
+        result = lt.check(response=claim, sources=[source])
+        if hasattr(result, 'verdict'):
+            return {"verdict": result.verdict, "confidence": getattr(result, 'confidence', None)}
+        elif isinstance(result, dict):
+            return result
+        return {"verdict": "PASS" if result else "FAIL", "confidence": None}
+    except Exception as e:
+        return {"verdict": "ERROR", "confidence": None, "error": str(e)}
+
+# === SİSTEM DURUMU ===
+def check_system_status(service_name: str) -> dict:
+    """Bir sistem servisinin calisip calismadigini kontrol eder.
+    
+    Args:
+        service_name: Kontrol edilecek servis adi ("chroma", "docker")
+    
+    Returns:
+        dict: {"status": "running"|"not_running", ...}
+    """
+    if service_name == "chroma":
+        try:
+            out = subprocess.check_output(["curl", "-sf", "http://localhost:8001/api/v2/heartbeat"], timeout=3, stderr=subprocess.DEVNULL).decode()
+            return {"status": "running", "output": out} if out else {"status": "not_running"}
+        except Exception:
+            return {"status": "not_running", "error": "Bağlantı yok"}
+    elif service_name == "docker":
+        try:
+            subprocess.check_output(["docker", "ps"], stderr=subprocess.DEVNULL)
+            return {"status": "running"}
+        except Exception:
+            return {"status": "not_running"}
+    return {"status": "unknown", "message": f"Bilinmeyen servis: {service_name}"}
+
+# === HATA YÖNETİMİ ===
+def log_hata(hata_tipi: str, detay: str, dogru_davranis: str) -> str:
+    """Hata log dosyasina yeni bir kayit ekler.
+    
+    Args:
+        hata_tipi: Hata kategorisi (ornek: "self_evolve", "chroma", "network")
+        detay: Hata ile ilgili detayli aciklama
+        dogru_davranis: Dogru davranis veya cozum onerisi
+    
+    Returns:
+        str: Islem sonucu mesaji
+    """
+    try:
+        with open(HATA_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{time.ctime()} | HATA: {hata_tipi} | DETAY: {detay} | DOGRUSU: {dogru_davranis}\n")
+        return f"✅ Hata loglandi: {hata_tipi}"
+    except Exception as e:
+        return f"❌ Hata loglanamadi: {str(e)}"
+
+
+def get_hata_gecmisi(limit: int = 5) -> list:
+    """Son N hata kaydini getirir.
+    
+    Args:
+        limit: Kac kayit getirilecegi (default: 5)
+    
+    Returns:
+        list: Hata kayitlari listesi
+    """
+    try:
+        if not os.path.exists(HATA_LOG):
+            return []
+        with open(HATA_LOG, "r", encoding="utf-8") as f:
+            return f.readlines()[-limit:]
+    except Exception as e:
+        return [f"Hata okunamadi: {str(e)}"]
+
+# === CHROMADB ARAMA ===
+def bilal_notes_ara(soru: str, n_results: int = 3) -> list:
+    """ChromaDB'de bilal_notes koleksiyonunda arama yapar.
+    
+    Args:
+        soru: Aranacak sorgu metni
+        n_results: Kac sonuc donecegi (default: 3)
+    
+    Returns:
+        list: Bulunan dokumanlar listesi
+    """
+    try:
+        client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+        collection = client.get_collection("bilal_notes")
+        results = collection.query(query_texts=[soru], n_results=n_results)
+        return results['documents'][0] if results['documents'] else []
+    except Exception as e:
+        return [f"Arama hatasi: {str(e)}"]
+
+
+def dosya_ekle(dosya_yolu: str, koleksiyon: str = "bilal_notes") -> str:
+    """Bir dosyayi ChromaDB koleksiyonuna ekler.
+    
+    Args:
+        dosya_yolu: Eklenecek dosyanin yolu
+        koleksiyon: Hedef koleksiyon adi (default: bilal_notes)
+    
+    Returns:
+        str: Islem sonucu
+    """
+    try:
+        client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+        collection = client.get_collection(koleksiyon)
+        with open(dosya_yolu, 'r', encoding='utf-8') as f:
+            content = f.read()
+        doc_id = os.path.basename(dosya_yolu)
+        collection.add(documents=[content], ids=[doc_id])
+        return f"✅ {doc_id} eklendi."
+    except Exception as e:
+        return f"❌ Dosya ekleme hatasi: {str(e)}"
+
+# === JARVIS SEVİYESİ YETENEKLER ===
+_session_memory = []
+
+def plan_hedef(hedef: str) -> dict:
+    """Hedefe gore plan adimlarini dondurur.
+    
+    Args:
+        hedef: Yapilacak isin tanimi
+    
+    Returns:
+        dict: {"adimlar": [...], "aciklama": "..."}
+    """
+    plans = {
+        "araştır": {
+            "adimlar": ["bilal_notes_ara(hedef)", "verify_claim(sonuc, kaynak)"],
+            "aciklama": "ChromaDB'de ara, sonra doğrula"
+        },
+        "kurulum": {
+            "adimlar": ["check_system_status(servis)", "dosya_ekle(dosya)", "log_hata(...)"],
+            "aciklama": "Sistem durumunu kontrol et, dosya ekle, hata logla"
+        },
+        "rapor": {
+            "adimlar": ["get_hata_gecmisi()", "bilal_notes_ara(...)"],
+            "aciklama": "Hata geçmişini al, ChromaDB'de ara"
+        },
+        "kod": {
+            "adimlar": ["terminal_calistir('python3 kod.py')", "verify_claim(...)"],
+            "aciklama": "Kodu çalıştır, sonucu doğrula"
+        },
+        "web": {
+            "adimlar": ["web_cek(url)", "bilal_notes_ara(...)", "dosya_ekle(...)"],
+            "aciklama": "Web'den veri çek, ara, kaydet"
+        }
+    }
+    for anahtar, plan in plans.items():
+        if anahtar in hedef.lower():
+            return plan
+    return {"adimlar": ["bilal_notes_ara(hedef)", "verify_claim(sonuc, kaynak)"], "aciklama": "Genel araştırma"}
+
+def session_hatirla(mesaj: str) -> list:
+    """Session hafizasina mesaj ekler, son 5 mesaji dondurur.
+    
+    Args:
+        mesaj: Kaydedilecek mesaj
+    
+    Returns:
+        list: Son 5 mesaj
+    """
+    try:
+        _session_memory.append(mesaj)
+        return _session_memory[-5:]
+    except Exception as e:
+        return [f"Hata: {str(e)}"]
+
+
+def session_al() -> list:
+    """Session hafizasinin tamamini dondurur.
+    
+    Returns:
+        list: Tum session mesajlari
+    """
+    try:
+        return _session_memory
+    except Exception as e:
+        return [f"Hata: {str(e)}"]
+
+def terminal_calistir(komut: str, timeout: int = 30) -> str:
+    """Shell komutu calistirir ve ciktisini dondurur.
+    
+    Args:
+        komut: Calistirilacak komut
+        timeout: Maksimum bekleme saniyesi (default: 30)
+    
+    Returns:
+        str: Komut ciktisi veya hata mesaji
+    """
+    try:
+        result = subprocess.check_output(komut.split(), text=True, stderr=subprocess.STDOUT, timeout=timeout)
+        return result.strip()
+    except subprocess.TimeoutExpired:
+        return f"HATA: Komut {timeout} saniyede tamamlanamadı"
+    except Exception as e:
+        return f"HATA: {str(e)}"
+
+def web_cek(url: str, max_karakter: int = 2000) -> str:
+    """Web sayfasinin icerigini HTTP ile ceker.
+    
+    Args:
+        url: Cekilecek web sayfasi URL'si
+        max_karakter: Maksimum karakter sayisi (default: 2000)
+    
+    Returns:
+        str: Sayfa icerigi veya hata mesaji
+    """
+    try:
+        import requests
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Hermes-Agent"})
+        r.raise_for_status()
+        return r.text[:max_karakter]
+    except Exception as e:
+        return f"❌ Web hatasi: {str(e)}"
+
+def self_repair(hata_mesaji: str, deneme: int = 1) -> str:
+    """Hata mesajina gore cozum onerisi dondurur.
+    
+    Args:
+        hata_mesaji: Alinan hata mesaji
+        deneme: Kacinci deneme oldugu (default: 1)
+    
+    Returns:
+        str: Cozum onerisi
+    """
+    try:
+        if deneme >= 3:
+            return "⚠️ Maksimum deneme (3) aşıldı. Manuel müdahale gerekli."
+        hata = hata_mesaji.lower()
+        if "chromadb" in hata or "chroma" in hata:
+            return "🔄 ChromaDB yeniden başlatılıyor: chroma run --host 0.0.0.0 --port 8001 &"
+        elif "dosya" in hata and "yok" in hata:
+            return "📄 Dosya oluşturuluyor: touch yeni_dosya.txt"
+        elif "bağlantı" in hata or "connection" in hata:
+            return "🌐 Bağlantı kontrol ediliyor: curl -I https://httpbin.org"
+        else:
+            return f"🛠 Bilinmeyen hata, alternatif deneniyor (deneme {deneme + 1}): {hata_mesaji[:100]}"
+    except Exception as e:
+        return f"❌ self_repair hatasi: {str(e)}"
+
+TELEGRAM_BOT_TOKEN = "8654902345:AAGqkOTA1QcDZ59T6h5jl7LCqZXhMxgNofQ"
+TELEGRAM_CHAT_ID = "5506784207"
+
+def telegram_mesaj_gonder(mesaj: str) -> bool:
+    """Telegram'a mesaj gonderir.
+    
+    Args:
+        mesaj: Gonderilecek mesaj metni
+    
+    Returns:
+        bool: Basarili mi
+    """
+    try:
+        import requests
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = {"chat_id": TELEGRAM_CHAT_ID, "text": mesaj}
+        r = requests.post(url, json=data, timeout=10)
+        return r.json().get("ok", False)
+    except Exception:
+        return False
+
+def otonom_calistir(hedef):
+    """
+    Hedefi dogrudan ChromaDB'de ara, sonucu verify_claim ile dogrula.
+    Donen: {'arama_sonucu': [...], 'dogrulama': {...}}
+    """
+    try:
+        zaman = suan()
+        print(f"Suan: {zaman['tarih']} {zaman['saat']}, {zaman['gun']}")
+
+        # 1. ChromaDB'de ara
+        arama_sonucu = bilal_notes_ara(hedef)
+        if not arama_sonucu:
+            return {"arama_sonucu": [], "dogrulama": "ChromaDB'de sonuc yok"}
+        
+        # 2. Ilk sonucu al (en alakali)
+        ilk_sonuc = arama_sonucu[0]
+        
+        # 3. Dogrulama icin kaynak
+        dogrulama = verify_claim(ilk_sonuc, "ChromaDB kaydi")
+        
+        return {
+            "arama_sonucu": arama_sonucu,
+            "dogrulama": dogrulama
+        }
+    except Exception as e:
+        return {"hata": str(e)}
+
+
+def analiz_et(mesaj):
+    """
+    Basit duygu analizi.
+    Donus: {"durum": "MUTLU|YORGUN|NOTR", "skor": -1..1, "tetikleyenler": []}
+    """
+    olumlu_kelime = ["teşekkür", "harika", "süper", "iyi", "başarılı", "aferin", "mükemmel"]
+    olumsuz_kelime = ["kötü", "hata", "yanlış", "sinir", "yorgun", "bıktım", "yeter", "uğraşma"]
+    mesaj_lower = mesaj.lower()
+
+    tetikleyenler = []
+    skor = 0
+
+    for k in olumlu_kelime:
+        if k in mesaj_lower:
+            tetikleyenler.append(k)
+            skor += 0.3
+    for k in olumsuz_kelime:
+        if k in mesaj_lower:
+            tetikleyenler.append(k)
+            skor -= 0.4
+
+    skor = max(-1.0, min(1.0, skor))
+
+    if skor > 0.2:
+        durum = "MUTLU"
+    elif skor < -0.2:
+        durum = "YORGUN/SINIRLI"
+    else:
+        durum = "NOTR"
+
+    return {"durum": durum, "skor": skor, "tetikleyenler": tetikleyenler}
+
+
+def hesap_hesapla(tur, miktar, gun_kaldi):
+    """Basit finans hesaplama: gelir/gider gunluk karsilik"""
+    if tur == "gider":
+        gunluk = miktar / gun_kaldi if gun_kaldi > 0 else 0
+        return f"Gider: {miktar} TL, {gun_kaldi} gun kaldi. Gunde ~{gunluk:.2f} TL ayir."
+    elif tur == "gelir":
+        gunluk = miktar / gun_kaldi if gun_kaldi > 0 else 0
+        return f"Gelir: {miktar} TL, {gun_kaldi} gun kaldi. Gunde ~{gunluk:.2f} TL birikecek."
+    else:
+        return "Bilinmeyen islem turu"
+
+
+def suan() -> dict:
+    """Su anki tarih, saat ve gun bilgisini dondurur.
+    
+    Returns:
+        dict: {"tarih": "2026-06-02", "saat": "03:47", "gun": "Tuesday", "timestamp": "2026-06-02T03:47:00"}
+    """
+    try:
+        now = datetime.datetime.now()
+        return {
+            "tarih": now.strftime("%Y-%m-%d"),
+            "saat": now.strftime("%H:%M"),
+            "gun": now.strftime("%A"),
+            "timestamp": now.isoformat()
+        }
+    except Exception as e:
+        return {"hata": str(e)}
+
+
+# === GOOGLE API ENTEGRASYONU ===
+GOOGLE_CREDENTIALS = os.path.expanduser("~/.google/credentials.json")
+GOOGLE_TOKEN = os.path.expanduser("~/.google/token.pickle")
+GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
+
+def google_auth():
+    """Google API kimlik dogrulama — token varsa kullan, yoksa hata don."""
+    creds = None
+    if os.path.exists(GOOGLE_TOKEN):
+        with open(GOOGLE_TOKEN, "rb") as f:
+            creds = pickle.load(f)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(GOOGLE_TOKEN, "wb") as f:
+                pickle.dump(creds, f)
+            return creds, None
+        return None, "❌ Google token gecersiz. Yeniden auth yap: google_auth_link() ile link al."
+    return creds, None
+
+def google_auth_link():
+    """Yeni auth linki olusturur (manuel tiklama icin)."""
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            GOOGLE_CREDENTIALS, GOOGLE_SCOPES,
+            redirect_uri="https://n8n.aiergene.xyz/webhook/google-oauth"
+        )
+        auth_url, _ = flow.authorization_url(
+            access_type='offline', include_granted_scopes='true', prompt='consent'
+        )
+        return auth_url
+    except Exception as e:
+        return f"❌ Auth linki olusturulamadi: {str(e)}"
+
+def gmail_gonder(alici, konu, icerik, html=False):
+    """Gmail ile e-posta gonderir.
+    alici: e-posta adresi
+    konu: konu basligi
+    icerik: mesaj icerigi (duz metin veya HTML)
+    html: True ise HTML formatinda gonder
+    """
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("gmail", "v1", credentials=creds)
+        import base64
+        from email.mime.text import MIMEText
+        mesaj = MIMEText(icerik, "html" if html else "plain")
+        mesaj["to"] = alici
+        mesaj["subject"] = konu
+        raw = base64.urlsafe_b64encode(mesaj.as_bytes()).decode()
+        service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        return f"✅ E-posta gonderildi: {alici} -> {konu}"
+    except Exception as e:
+        return f"❌ Gmail hatasi: {str(e)}"
+
+def gmail_oku(max_sonuc=5):
+    """Gelen kutusundaki son epostalarin basliklarini getirir."""
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("gmail", "v1", credentials=creds)
+        sonuc = service.users().messages().list(userId="me", maxResults=max_sonuc).execute()
+        mesajlar = sonuc.get("messages", [])
+        liste = []
+        for m in mesajlar:
+            detay = service.users().messages().get(userId="me", id=m["id"]).execute()
+            baslik = ""
+            for h in detay.get("payload", {}).get("headers", []):
+                if h["name"] == "Subject":
+                    baslik = h["value"]
+                    break
+            liste.append({"id": m["id"][:8], "baslik": baslik})
+        return liste
+    except Exception as e:
+        return f"❌ Gmail okuma hatasi: {str(e)}"
+
+def takvim_etkinlik_ekle(baslik, baslangic, bitis, aciklama=""):
+    """Google Calendar'a etkinlik ekler.
+    baslik: etkinlik adi
+    baslangic: ISO format baslangic (orn: \"2026-06-03T10:00:00\")
+    bitis: ISO format bitis
+    aciklama: opsiyonel aciklama
+    """
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("calendar", "v3", credentials=creds)
+        etkinlik = {
+            "summary": baslik,
+            "description": aciklama,
+            "start": {"dateTime": baslangic, "timeZone": "Europe/Istanbul"},
+            "end": {"dateTime": bitis, "timeZone": "Europe/Istanbul"},
+        }
+        service.events().insert(calendarId="primary", body=etkinlik).execute()
+        return f"✅ Takvim etkinligi eklendi: {baslik}"
+    except Exception as e:
+        return f"❌ Takvim hatasi: {str(e)}"
+
+def takvim_etkinlik_listele(max_sonuc=10):
+    """Onumuzdeki etkinlikleri listeler."""
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("calendar", "v3", credentials=creds)
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+        sonuc = service.events().list(
+            calendarId="primary", timeMin=now,
+            maxResults=max_sonuc, singleEvents=True,
+            orderBy="startTime"
+        ).execute()
+        return [
+            {"baslik": e.get("summary", ""),
+             "baslangic": e["start"].get("dateTime", e["start"].get("date"))}
+            for e in sonuc.get("items", [])
+        ]
+    except Exception as e:
+        return f"❌ Takvim listeleme hatasi: {str(e)}"
+
+
+# === Google Drive ===
+def drive_dosya_listele(klasor_id="root", max_sonuc=10):
+    """Google Drive'daki dosyalari listeler.
+    klasor_id: Klasor ID'si (default: root)
+    max_sonuc: Maksimum dosya sayisi
+    Donus: dosya listesi veya hata mesaji
+    """
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("drive", "v3", credentials=creds)
+        sonuc = service.files().list(
+            q=f"'{klasor_id}' in parents and trashed=false",
+            pageSize=max_sonuc,
+            fields="files(id, name, mimeType, size, createdTime)"
+        ).execute()
+        dosyalar = sonuc.get("files", [])
+        if not dosyalar:
+            return "📂 Drive'da dosya bulunamadi."
+        return [
+            {
+                "id": d["id"],
+                "ad": d["name"],
+                "tur": d["mimeType"].split(".")[-1] if "." in d["mimeType"] else d["mimeType"],
+                "boyut": f"{int(d.get('size', 0)) / 1024:.1f} KB" if d.get("size") else "bilinmiyor"
+            }
+            for d in dosyalar
+        ]
+    except Exception as e:
+        return f"❌ Drive listeleme hatasi: {str(e)}"
+
+
+def drive_dosya_yukle(dosya_yolu, hedef_klasor="root"):
+    """Yerel bir dosyayi Google Drive'a yukler.
+    dosya_yolu: Yuklenecek dosyanin yolu
+    hedef_klasor: Hedef klasor ID'si (default: root)
+    Donus: basari veya hata mesaji
+    """
+    try:
+        if not os.path.exists(dosya_yolu):
+            return f"❌ Dosya bulunamadi: {dosya_yolu}"
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("drive", "v3", credentials=creds)
+        from googleapiclient.http import MediaFileUpload
+        dosya_adi = os.path.basename(dosya_yolu)
+        media = MediaFileUpload(dosya_yolu, resumable=True)
+        metadata = {"name": dosya_adi, "parents": [hedef_klasor]}
+        dosya = service.files().create(body=metadata, media_body=media, fields="id,name").execute()
+        return f"✅ Drive'a yuklendi: {dosya['name']} (ID: {dosya['id'][:20]}...)"
+    except Exception as e:
+        return f"❌ Drive yukleme hatasi: {str(e)}"
+
+
+# === Google Sheets ===
+def sheets_oku(sheet_id, sayfa="Sheet1", huc_bolge="A1:Z100"):
+    """Google Sheets'ten veri okur.
+    sheet_id: Sheet'in ID'si (URL'deki uzun kod)
+    sayfa: Sayfa adi (default: Sheet1)
+    huc_bolge: Huc Bolge (default: A1:Z100)
+    Donus: satir listesi veya hata mesaji
+    """
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("sheets", "v4", credentials=creds)
+        range_name = f"{sayfa}!{huc_bolge}"
+        sonuc = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range=range_name
+        ).execute()
+        degerler = sonuc.get("values", [])
+        if not degerler:
+            return "📊 Sheet'te veri bulunamadi."
+        return degerler
+    except Exception as e:
+        return f"❌ Sheet okuma hatasi: {str(e)}"
+
+
+def sheets_yaz(sheet_id, sayfa="Sheet1", huc_bolge="A1", veriler=None):
+    """Google Sheets'e veri yazar.
+    sheet_id: Sheet'in ID'si
+    sayfa: Sayfa adi
+    huc_bolge: Baslangic huc Bolge (default: A1)
+    veriler: 2 boyutlu liste [[satir1_h1, satir1_h2], [satir2_h1, satir2_h2]]
+    Donus: basari veya hata mesaji
+    """
+    if veriler is None:
+        return "❌ Veri gerekli"
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("sheets", "v4", credentials=creds)
+        range_name = f"{sayfa}!{huc_bolge}"
+        body = {"values": veriler}
+        sonuc = service.spreadsheets().values().update(
+            spreadsheetId=sheet_id, range=range_name,
+            valueInputOption="USER_ENTERED", body=body
+        ).execute()
+        return f"✅ Sheet'e yazildi: {sonuc.get('updatedCells', 0)} hucBolge guncellendi"
+    except Exception as e:
+        return f"❌ Sheet yazma hatasi: {str(e)}"
+
+
+def sheets_ekle(sheet_id, sayfa="Sheet1", veriler=None):
+    """Google Sheets'e yeni satir ekler (append).
+    sheet_id: Sheet'in ID'si
+    sayfa: Sayfa adi
+    veriler: 2 boyutlu liste [[h1, h2], [h3, h4]]
+    Donus: basari veya hata mesaji
+    """
+    if veriler is None:
+        return "❌ Veri gerekli"
+    try:
+        creds, hata = google_auth()
+        if hata:
+            return hata
+        service = build("sheets", "v4", credentials=creds)
+        range_name = f"{sayfa}!A1"
+        body = {"values": veriler}
+        sonuc = service.spreadsheets().values().append(
+            spreadsheetId=sheet_id, range=range_name,
+            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+            body=body
+        ).execute()
+        return f"✅ Sheet'e eklendi: {sonuc.get('updates', {}).get('updatedRows', 0)} satir"
+    except Exception as e:
+        return f"❌ Sheet ekleme hatasi: {str(e)}"
+
+
+# === HAVA DURUMU ===
+def hava_durumu(sehir="Bursa"):
+    """Belirtilen sehrin hava durumunu sorgular.
+    sehir: Sehir adi (default: Bursa)
+    Donus: hava bilgisi veya hata mesaji
+    """
+    try:
+        import requests as req
+        url = f"https://wttr.in/{sehir}?format=%C+%t+%h+%w&lang=tr"
+        resp = req.get(url, timeout=10)
+        if resp.status_code == 200:
+            bilgi = resp.text.strip()
+            return f"🌤 {sehir}: {bilgi}"
+        return f"❌ Hava durumu alinamadi (HTTP {resp.status_code})"
+    except Exception as e:
+        return f"❌ Hava durumu hatasi: {str(e)}"
+
+
+# === HATIRLATICI ===
+def hatirlatici_kur(mesaj, dakika_sonra):
+    """Kisa sureli hatirlatici kurar (dakika hassasiyetinde).
+    mesaj: Hatirlatma mesaji
+    dakika_sonra: Kac dakika sonra hatirlatilsin
+    Donus: basari mesaji
+    """
+    try:
+        import threading
+        def _hatirlat():
+            import time
+            time.sleep(dakika_sonra * 60)
+            try:
+                telegram_mesaj_gonder(f"⏰ HATIRLATICI: {mesaj}")
+            except:
+                pass
+        t = threading.Thread(target=_hatirlat, daemon=True)
+        t.start()
+        return f"⏰ Hatirlatici kuruldu: {dakika_sonra} dk sonra \"{mesaj}\""
+    except Exception as e:
+        return f"❌ Hatirlatici hatasi: {str(e)}"
+
+
+# === POSTGRESQL İKİNCİ BEYİN (Embedding Destekli) ===
+PG_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "ergeneai",
+    "user": "hermes",
+    "password": "hermes_2026"
+}
+
+# Embedding modeli (cache'li)
+_embedding_model = None
+
+def _get_embedding_model():
+    """SentenceTransformer modelini singleton olarak yukler."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedding_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+        except Exception as e:
+            print(f"⚠️ Embedding model yuklenemedi: {e}")
+            _embedding_model = None
+    return _embedding_model
+
+
+def _get_embedding(text: str) -> list:
+    """Metni 384 boyutlu vektore donusturur (yerel model, ucretsiz)."""
+    model = _get_embedding_model()
+    if model:
+        return model.encode(text).tolist()
+    return None
+
+
+def pg_baglan():
+    """PostgreSQL veritabani baglantisi acar."""
+    import psycopg2
+    return psycopg2.connect(**PG_CONFIG)
+
+
+def pg_kaydet(content: str, category: str = "genel") -> str:
+    """Metni vektoruyle birlikte PostgreSQL hafizasina kaydeder.
+    
+    Args:
+        content: Kaydedilecek bilgi
+        category: Kategori (tech_note, business_strategy, personal_reminder, genel)
+    
+    Returns:
+        str: Islem sonucu
+    """
+    try:
+        embedding_vector = _get_embedding(content)
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            if embedding_vector:
+                cur.execute(
+                    "INSERT INTO hermes_memory (content, category, embedding) VALUES (%s, %s, %s)",
+                    (content, category, embedding_vector)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO hermes_memory (content, category) VALUES (%s, %s)",
+                    (content, category)
+                )
+            conn.commit()
+        conn.close()
+        return f"✅ PG beyne kaydedildi ({category})"
+    except Exception as e:
+        return f"❌ PG kayit hatasi: {str(e)}"
+
+
+def pg_ara(search_text: str, limit: int = 5) -> list:
+    """Hermes ikinci beyninde metin bazli arama yapar.
+    
+    Args:
+        search_text: Aranacak metin
+        limit: Kac sonuc
+    
+    Returns:
+        list: Eslesen kayitlar
+    """
+    try:
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, created_at FROM hermes_memory "
+                "WHERE content ILIKE %s ORDER BY created_at DESC LIMIT %s",
+                (f"%{search_text}%", limit)
+            )
+            results = [{"id": r[0], "content": r[1][:300], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
+        conn.close()
+        return results if results else ["PG beyinde eslesme bulunamadi"]
+    except Exception as e:
+        return [f"PG arama hatasi: {str(e)}"]
+
+
+def pg_ara_vector(sorgu: str, limit: int = 5, esik: float = 0.3) -> list:
+    """Anlamsal (semantik) vektor aramasi yapar.
+    
+    Verilen sorgunun embedding'ini cikarir, PostgreSQL'de cosine similarity
+    ile en benzer kayitlari bulur. ChromaDB'ye alternatif, daha olceklenebilir.
+    
+    Args:
+        sorgu: Aranacak metin (dogal dil)
+        limit: Kac sonuc
+        esik: Benzerlik esigi (0.0-1.0, yuksek = daha benzer)
+    
+    Returns:
+        list: {"id", "content", "category", "benzerlik", "tarih"}
+    """
+    try:
+        embedding_vector = _get_embedding(sorgu)
+        if not embedding_vector:
+            return ["⚠️ Embedding modeli yuklu degil, metin aramasina dusuluyor..."] + pg_ara(sorgu, limit)
+        
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, "
+                "1 - (embedding <=> %s::vector) AS benzerlik, "
+                "created_at FROM hermes_memory "
+                "WHERE embedding IS NOT NULL "
+                "AND 1 - (embedding <=> %s::vector) > %s "
+                "ORDER BY benzerlik DESC LIMIT %s",
+                (embedding_vector, embedding_vector, esik, limit)
+            )
+            results = []
+            for r in cur.fetchall():
+                results.append({
+                    "id": r[0],
+                    "content": r[1][:300],
+                    "category": r[2],
+                    "benzerlik": round(r[3], 3),
+                    "tarih": str(r[4])[:10]
+                })
+        conn.close()
+        return results if results else ["Vektor aramasinda eslesme bulunamadi"]
+    except Exception as e:
+        return [f"PG vektor arama hatasi: {str(e)}"]
+
+
+def pg_son(limit: int = 5) -> list:
+    """Son eklenen kayitlari getirir."""
+    try:
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, created_at FROM hermes_memory "
+                "ORDER BY created_at DESC LIMIT %s", (limit,)
+            )
+            results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
+        conn.close()
+        return results
+    except Exception as e:
+        return [f"PG sorgu hatasi: {str(e)}"]
+
+
+def pg_proaktif_analiz() -> dict:
+    """Proaktif sabah brifingi icin PG hafizasini analiz eder.
+
+    Son 48 saatteki tech_note ve business_strategy kayitlarini ceker,
+    Ollama (qwen2.5:3b) ile analiz edip 3 maddelik ozet cikarir.
+    """
+    import datetime
+    try:
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT content, category, created_at FROM hermes_memory "
+                "WHERE category IN ('tech_note', 'business_strategy') "
+                "AND created_at > NOW() - INTERVAL '48 hours' "
+                "ORDER BY created_at DESC"
+            )
+            records = cur.fetchall()
+        conn.close()
+
+        if not records:
+            return {"ozet": "Son 48 saatte analiz edilecek stratejik kayit bulunamadi.", "kayit_sayisi": 0}
+
+        kayit_metni = "\n".join([f"[{r[1]}] {str(r[2])[:10]}: {r[0][:300]}" for r in records])
+
+        import ollama
+        prompt = f"""Sen Hermes proaktif analiz motorusun. Asagidaki son 48 saatte kaydedilmis notlari analiz et ve Bilal icin TURKCE olarak 3 bolumlu bir ozet cikar:
+
+1. BU GUNUN ODAK NOKTASI (En kritik 1-2 madde)
+2. FIRSATLAR (Kaldiraca donusturulebilecek girdiler)
+3. OPERASYONEL RISKLER (Aksiyon gerektiren tehditler)
+
+NOTLAR:
+{kayit_metni}
+
+CEVAP FORMATI (TURKCE):
+**Gunun Odak Noktasi**
+- ...
+
+**Firsatlar**
+- ...
+
+**Operasyonel Riskler**
+- ..."""
+
+        response = ollama.chat(
+            model='qwen2.5:3b',
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0.3, 'num_predict': 500}
+        )
+
+        return {"ozet": response['message']['content'].strip(), "kayit_sayisi": len(records)}
+    except Exception as e:
+        return {"ozet": f"Analiz hatasi: {str(e)}", "kayit_sayisi": 0, "hata": str(e)}
+def beyin_ara(soru: str, n_results: int = 5) -> list:
+    """Hermes'in kalici beyninde (PostgreSQL + Embedding Daemon) arama yapar.
+
+    ChromaDB emekli edildi. Artik PG + Embedding Daemon kullanilir.
+
+    Args:
+        soru: Aranacak sorgu
+        n_results: Kac sonuc
+
+    Returns:
+        list: Bulunan dokumanlar
+    """
+    try:
+        result = pg_ara_vector(soru, limit=n_results, esik=0.3)
+        if isinstance(result, list):
+            return [r.get("content", "") for r in result if isinstance(r, dict)]
+        return ["Beyinde eslesme bulunamadi."]
+    except Exception as e:
+        return [f"Beyin hatasi: {str(e)}"]
+
+
+def beyin_kaydet(bilgi: str, tur: str = "genel", etiket: str = "") -> str:
+    """Hermes'in kalici beynine (PostgreSQL + Embedding Daemon) bilgi kaydeder.
+
+    ChromaDB emekli edildi. Artik pg_kaydet kullanilir.
+
+    Args:
+        bilgi: Kaydedilecek bilgi metni
+        tur: Bilgi turu (pg_kaydet'te category olarak gecer)
+        etiket: Opsiyonel etiket (PG'de kullanilmaz, uyumluluk icin duruyor)
+
+    Returns:
+        str: Islem sonucu
+    """
+    try:
+        return pg_kaydet(bilgi, category=tur)
+    except Exception as e:
+        return f"Beyin kayit hatasi: {str(e)}"
+
+# === HERMES DIJITAL BEYIN KOPRUSU ===
+def hermes_beyin_saglik_raporu() -> dict:
+    """Hermes'in beyin sagligini tek raporda verir. Read-only calisir."""
+    from hermes_brain_core import run_brain_health_report
+    return run_brain_health_report()
+
+
+def hermes_oncelik_analiz(gorevler) -> list:
+    """Gorevleri aciliyet/gelir/risk/kaldirac/hedef uyumuna gore siralar."""
+    from hermes_brain_core import parse_priority_items, rank_priorities
+    return rank_priorities(parse_priority_items(gorevler))
+
+
+def hermes_proaktif_brifing(mod: str = "sabah", hafiza=None, saglik=None) -> dict:
+    """Sabah/aksam icin risk, firsat ve odak brifingi uretir."""
+    from hermes_brain_core import generate_briefing, run_brain_health_report
+    if saglik is None:
+        saglik = run_brain_health_report()
+    return generate_briefing(memories=hafiza or [], health=saglik, mode=mod)
+
+
+def hermes_eylem_guvenlik_sinifi(eylem: str) -> dict:
+    """Bir eylemin serbest mi, onayli mi, yasak mi oldugunu soyler."""
+    from hermes_brain_core import classify_autonomy_action
+    return classify_autonomy_action(eylem)
+
+
+def hermes_gelisim_raporu() -> dict:
+    """Hermes'in sonraki gelisim kaldiraclarini saglik sinyallerinden cikarir."""
+    from hermes_brain_core import build_development_report, run_brain_health_report
+    return build_development_report(run_brain_health_report())
+
+
+def hermes_hafiza_kayit_hazirla(content: str, category: str = "genel", importance: int = 3, recall_purpose: str = "") -> dict:
+    """Hafizaya yazmadan once kaydi kalite ve kategori acisindan hazirlar; yazma yapmaz."""
+    from hermes_brain_core import prepare_memory_entry
+    return prepare_memory_entry(content, category=category, importance=importance, recall_purpose=recall_purpose)
+
+
+def hermes_hafiza_kalite_raporu(limit: int = 200) -> dict:
+    """PostgreSQL hafiza kayitlari icin read-only kalite raporu uretir."""
+    from hermes_brain_core import run_memory_quality_report
+    return run_memory_quality_report(limit=limit)
+
+
+def hermes_karar_plani(gorevler, baglam=None) -> dict:
+    """Gorevlerden tek odakli, gerekceli karar plani uretir."""
+    from hermes_brain_core import make_decision_plan
+    return make_decision_plan(gorevler, context=baglam or {})
+
+
+def hermes_oncelik_motoru(rapor, referans_tarih: str | None = None, baglam=None) -> dict:
+    """Dogal durum raporu veya gorev listesinden tek odakli COO oncelik karari uretir."""
+    from hermes_brain_core import build_operational_priority
+    return build_operational_priority(rapor, reference_date=referans_tarih, context=baglam or {})
+
+
+def hermes_fiziksel_aksiyon_plani(eylem, baglam=None) -> dict:
+    """Takvim/hatirlatici/mesaj gibi dis dunya aksiyonlarini onay kapisindan once planlar."""
+    from hermes_brain_core import build_physical_action_plan
+    return build_physical_action_plan(eylem, context=baglam or {})
+
+
+def hermes_fiziksel_aksiyon_uygula(plan, onay: bool = False) -> dict:
+    """Onay verilirse desteklenen dis dunya aksiyonlarini guvenli executor kapisindan calistirir."""
+    from hermes_brain_core import apply_physical_action_plan
+
+    def _mesaj_taslagi_executor(action):
+        params = action.get("params", {})
+        alici = params.get("alici")
+        kanal = params.get("kanal")
+        if kanal == "telegram_bilal" or alici == "bilal":
+            return telegram_mesaj_gonder(action.get("draft", ""))
+        return {"ok": False, "status": "taslak_hazir", "reason": "Alici/kanal dogrulanmadan mesaj gonderilmez."}
+
+    def _hatirlatici_executor(action):
+        params = action.get("params", {})
+        dakika_sonra = params.get("dakika_sonra")
+        if not isinstance(dakika_sonra, int) or dakika_sonra <= 0:
+            return {"ok": False, "status": "eksik_bilgi", "missing": ["dakika_sonra"]}
+        return hatirlatici_kur(params.get("mesaj") or action.get("draft", ""), dakika_sonra)
+
+    def _takvim_executor(action):
+        params = action.get("params", {})
+        if not params.get("baslangic") or not params.get("bitis"):
+            return {"ok": False, "status": "eksik_bilgi", "missing": ["baslangic", "bitis"]}
+        return takvim_etkinlik_ekle(
+            params.get("baslik", "Hermes etkinligi"),
+            params["baslangic"],
+            params["bitis"],
+            params.get("aciklama", ""),
+        )
+
+    executors = {
+        "mesaj_taslagi": _mesaj_taslagi_executor,
+        "hatirlatici": _hatirlatici_executor,
+        "takvim_etkinlik": _takvim_executor,
+    }
+    return apply_physical_action_plan(plan, approved=onay, executors=executors)
+
+
+def hermes_arac_guvenilirlik_raporu() -> dict:
+    """tools.py araclarini calistirmadan kullanilabilirlik/risk/fallback acisindan raporlar."""
+    from hermes_brain_core import inspect_tools_static
+    return inspect_tools_static()
+
+
+def hermes_coo_cevap_kalite_raporu(ornek_cevaplar=None) -> dict:
+    """COO cevap kalitesini senaryo bazli puanlar; prompt veya dosya degistirmez."""
+    from hermes_brain_core import run_coo_response_quality_report
+    return run_coo_response_quality_report(samples=ornek_cevaplar or {})
+
+
+def hermes_durum() -> dict:
+    """Hermes'in stratejik isletim durumunu tek raporda verir; read-only calisir."""
+    from hermes_brain_core import run_strategic_status
+    return run_strategic_status()
+
+
+def hermes_skor_karti() -> dict:
+    """Hermes'in saglik/hafiza/arac/guvenlik/COO skorunu tek raporda verir; read-only calisir."""
+    from hermes_brain_core import run_scorecard
+    return run_scorecard()
+
+
+def hermes_hafiza_ameliyat_plani(kayitlar=None) -> dict:
+    """Hafiza kalitesini artirmak icin yazmadan duzeltme/import plani uretir."""
+    from hermes_brain_core import build_memory_surgery_plan, collect_postgres_memory_records
+    if kayitlar is None:
+        kayitlar = collect_postgres_memory_records(limit=200)
+    return build_memory_surgery_plan(kayitlar)
+
+
+def hermes_arac_ameliyat_plani() -> dict:
+    """Arac guvenilirligi icin kurulum yapmadan fallback/blok/onay plani uretir."""
+    from hermes_brain_core import build_tool_surgery_plan, inspect_tools_static
+    report = inspect_tools_static()
+    return build_tool_surgery_plan(list(report["tools"].keys()), report["dependency_checks"])
+
+
+def hermes_guvenlik_sertlestirme_plani() -> dict:
+    """Root/SSH/.env/port riskleri icin secret gostermeden read-only sertlestirme plani uretir."""
+    from hermes_brain_core import build_security_hardening_plan, collect_ssh_policy_output, parse_ssh_security_policy
+    import glob
+    import subprocess
+    sshd = collect_ssh_policy_output()
+    ports = []
+    try:
+        output = subprocess.check_output(["sh", "-c", "ss -tulpen 2>/dev/null | awk 'NR>1 {print $5}' | sed -E 's/.*:([0-9]+)$/\\1/' | sort -nu"], text=True)
+        ports = [int(line) for line in output.splitlines() if line.isdigit()]
+    except Exception:
+        ports = []
+    ssh_policy = parse_ssh_security_policy(sshd)
+    signals = {
+        "root_ssh": ssh_policy["root_ssh"],
+        "password_auth": ssh_policy["password_auth"],
+        "env_files": glob.glob("/opt/hermes/.env") + glob.glob("/home/hermes/.hermes/.env"),
+        "open_ports": ports,
+        "service_user": "hermes",
+        "secret_samples": [],
+    }
+    return build_security_hardening_plan(signals)
+
+
+def hermes_yuzde_yuz_hazirlik_raporu() -> dict:
+    """%100 Jarvis hedefi icin tamam/onay/harici entegrasyon ayrimini verir."""
+    from hermes_brain_core import run_readiness_report
+    return run_readiness_report()
+
+
+def _hermes_env_secret(name: str) -> str:
+    """Secret degerini env veya izinli .env dosyalarindan okur; degeri loglamaz."""
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    for env_path in ("/opt/hermes/.env", "/home/hermes/.hermes/.env"):
+        try:
+            with open(env_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    clean = line.strip()
+                    if not clean or clean.startswith("#") or "=" not in clean:
+                        continue
+                    key, raw = clean.split("=", 1)
+                    if key.strip() == name:
+                        return raw.strip().strip('"').strip("'")
+        except Exception:
+            continue
+    return ""
+
+
+def hermes_ses_dosyasi_uret(
+    metin: str,
+    voice: str = "marin",
+    response_format: str = "mp3",
+    instructions: str = "Turkce, sakin, stratejik ve net bir dijital COO gibi konus.",
+    dosya_yolu: str | None = None,
+) -> dict:
+    """Hermes metnini OpenAI TTS ile ses dosyasina cevirir; secret degeri gostermez."""
+    from hermes_brain_core import build_tts_request, choose_tts_provider
+    import asyncio
+    import tempfile
+    import uuid
+    import requests
+
+    request = build_tts_request(metin, voice=voice, response_format=response_format, instructions=instructions)
+    if not request["ok"]:
+        return {"ok": False, "warnings": request["warnings"], "hata": "ses_istegi_gecersiz"}
+
+    api_key = _hermes_env_secret("OPENAI_API_KEY")
+    extension = request["extension"]
+    target = dosya_yolu or os.path.join(tempfile.gettempdir(), f"hermes_voice_{uuid.uuid4().hex}.{extension}")
+    edge_available = False
+    try:
+        import edge_tts  # type: ignore
+        edge_available = True
+    except Exception:
+        edge_tts = None  # type: ignore
+    provider = choose_tts_provider(openai_api_key_present=bool(api_key), edge_tts_available=edge_available)
+    if not provider["ok"]:
+        return {"ok": False, "warnings": provider.get("warnings", []), "hata": provider["reason"]}
+    if provider["provider"] == "edge_tts":
+        if not target.endswith(".mp3"):
+            target = os.path.splitext(target)[0] + ".mp3"
+        try:
+            async def _save_edge_audio():
+                communicate = edge_tts.Communicate(metin, "tr-TR-AhmetNeural")
+                await communicate.save(target)
+            asyncio.run(_save_edge_audio())
+            return {
+                "ok": True,
+                "dosya_yolu": target,
+                "bytes": os.path.getsize(target),
+                "model": "edge-tts",
+                "voice": "tr-TR-AhmetNeural",
+                "format": "mp3",
+                "provider": "edge_tts",
+                "ai_generated_voice": True,
+                "disclosure": "Bu ses AI tarafindan uretilmistir.",
+            }
+        except Exception as exc:
+            return {"ok": False, "warnings": ["edge_tts_uretim_hatasi"], "hata": str(exc)[:200]}
+
+    try:
+        response = requests.post(
+            request["url"],
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=request["payload"],
+            timeout=90,
+        )
+        if response.status_code >= 400:
+            return {"ok": False, "warnings": ["tts_api_hatasi"], "status_code": response.status_code}
+        with open(target, "wb") as handle:
+            handle.write(response.content)
+        return {
+            "ok": True,
+            "dosya_yolu": target,
+            "bytes": len(response.content),
+            "model": request["payload"]["model"],
+            "voice": request["payload"]["voice"],
+            "format": extension,
+            "provider": "openai",
+            "ai_generated_voice": True,
+            "disclosure": "Bu ses AI tarafindan uretilmistir.",
+        }
+    except Exception as exc:
+        return {"ok": False, "warnings": ["tts_uretim_hatasi"], "hata": str(exc)[:200]}
+
+
+def telegram_ses_gonder(dosya_yolu: str, baslik: str = "Hermes sesli cevap") -> dict:
+    """Telegram'a audio dosyasi gonderir; token degerini dondurmez."""
+    try:
+        import requests
+        if not os.path.exists(dosya_yolu):
+            return {"ok": False, "hata": "dosya_yok"}
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio"
+        with open(dosya_yolu, "rb") as audio:
+            response = requests.post(
+                url,
+                data={"chat_id": TELEGRAM_CHAT_ID, "caption": baslik},
+                files={"audio": audio},
+                timeout=30,
+            )
+        body = response.json()
+        return {"ok": bool(body.get("ok")), "status_code": response.status_code}
+    except Exception as exc:
+        return {"ok": False, "hata": str(exc)[:200]}
+
+
+def hermes_sesli_cevap(
+    metin: str,
+    voice: str = "marin",
+    baslik: str = "Hermes sesli cevap",
+    telegrama_gonder: bool = True,
+) -> dict:
+    """Metni ses dosyasina cevirir ve istege bagli Telegram'a gonderir."""
+    audio = hermes_ses_dosyasi_uret(metin, voice=voice)
+    if not audio.get("ok"):
+        return {"ok": False, "ses": audio}
+    result = {"ok": True, "ses": audio}
+    if telegrama_gonder:
+        result["telegram"] = telegram_ses_gonder(audio["dosya_yolu"], baslik=baslik)
+        result["ok"] = bool(result["telegram"].get("ok"))
+    return result
+
+print("✅ tools.py yuklendi. Mevcut fonksiyonlar:")
+print("   - bilal_notes_ara, dosya_ekle, plan_hedef, session_hatirla")
+print("   - terminal_calistir, web_cek, self_repair, telegram_mesaj_gonder, otonom_calistir")
+print("   - analiz_et, hesap_hesapla, suan")
+print("   - google_auth, google_auth_link, gmail_gonder, gmail_oku")
+print("   - takvim_etkinlik_ekle, takvim_etkinlik_listele")
+print("   - drive_dosya_listele, drive_dosya_yukle")
+print("   - sheets_oku, sheets_yaz, sheets_ekle")
+print("   - hava_durumu, hatirlatici_kur")
+print("   - beyin_ara, beyin_kaydet")
+print("   - pg_kaydet, pg_ara, pg_ara_vector, pg_son, pg_baglan")
+print("   - hermes_ses_dosyasi_uret, telegram_ses_gonder, hermes_sesli_cevap")
+print("   - hermes_oncelik_motoru")
+print("   - hermes_fiziksel_aksiyon_plani, hermes_fiziksel_aksiyon_uygula")
