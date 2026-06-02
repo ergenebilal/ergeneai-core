@@ -706,7 +706,7 @@ def hatirlatici_kur(mesaj, dakika_sonra):
         return f"❌ Hatirlatici hatasi: {str(e)}"
 
 
-# === POSTGRESQL İKİNCİ BEYİN ===
+# === POSTGRESQL İKİNCİ BEYİN (Embedding Destekli) ===
 PG_CONFIG = {
     "host": "localhost",
     "port": 5432,
@@ -715,26 +715,61 @@ PG_CONFIG = {
     "password": "hermes_2026"
 }
 
+# Embedding modeli (cache'li)
+_embedding_model = None
+
+def _get_embedding_model():
+    """SentenceTransformer modelini singleton olarak yukler."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedding_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+        except Exception as e:
+            print(f"⚠️ Embedding model yuklenemedi: {e}")
+            _embedding_model = None
+    return _embedding_model
+
+
+def _get_embedding(text: str) -> list:
+    """Metni 384 boyutlu vektore donusturur (yerel model, ucretsiz)."""
+    model = _get_embedding_model()
+    if model:
+        return model.encode(text).tolist()
+    return None
+
+
 def pg_baglan():
-    """PostgreSQL baglantisi acar."""
+    """PostgreSQL veritabani baglantisi acar."""
     import psycopg2
     return psycopg2.connect(**PG_CONFIG)
 
 
 def pg_kaydet(content: str, category: str = "genel") -> str:
-    """Hermes ikinci beynine bilgi kaydeder (henuz embedding yok).
-    content: Kaydedilecek bilgi
-    category: Kategori (tech_note, business_strategy, personal_reminder, genel)
+    """Metni vektoruyle birlikte PostgreSQL hafizasina kaydeder.
+    
+    Args:
+        content: Kaydedilecek bilgi
+        category: Kategori (tech_note, business_strategy, personal_reminder, genel)
+    
+    Returns:
+        str: Islem sonucu
     """
     try:
+        embedding_vector = _get_embedding(content)
         conn = pg_baglan()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO hermes_memory (content, category) VALUES (%s, %s)",
-            (content, category)
-        )
-        conn.commit()
-        cur.close()
+        with conn.cursor() as cur:
+            if embedding_vector:
+                cur.execute(
+                    "INSERT INTO hermes_memory (content, category, embedding) VALUES (%s, %s, %s)",
+                    (content, category, embedding_vector)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO hermes_memory (content, category) VALUES (%s, %s)",
+                    (content, category)
+                )
+            conn.commit()
         conn.close()
         return f"✅ PG beyne kaydedildi ({category})"
     except Exception as e:
@@ -743,36 +778,84 @@ def pg_kaydet(content: str, category: str = "genel") -> str:
 
 def pg_ara(search_text: str, limit: int = 5) -> list:
     """Hermes ikinci beyninde metin bazli arama yapar.
-    search_text: Aranacak metin
-    limit: Kac sonuc
+    
+    Args:
+        search_text: Aranacak metin
+        limit: Kac sonuc
+    
+    Returns:
+        list: Eslesen kayitlar
     """
     try:
         conn = pg_baglan()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, content, category, created_at FROM hermes_memory "
-            "WHERE content ILIKE %s ORDER BY created_at DESC LIMIT %s",
-            (f"%{search_text}%", limit)
-        )
-        results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
-        cur.close()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, created_at FROM hermes_memory "
+                "WHERE content ILIKE %s ORDER BY created_at DESC LIMIT %s",
+                (f"%{search_text}%", limit)
+            )
+            results = [{"id": r[0], "content": r[1][:300], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
         conn.close()
         return results if results else ["PG beyinde eslesme bulunamadi"]
     except Exception as e:
         return [f"PG arama hatasi: {str(e)}"]
 
 
+def pg_ara_vector(sorgu: str, limit: int = 5, esik: float = 0.3) -> list:
+    """Anlamsal (semantik) vektor aramasi yapar.
+    
+    Verilen sorgunun embedding'ini cikarir, PostgreSQL'de cosine similarity
+    ile en benzer kayitlari bulur. ChromaDB'ye alternatif, daha olceklenebilir.
+    
+    Args:
+        sorgu: Aranacak metin (dogal dil)
+        limit: Kac sonuc
+        esik: Benzerlik esigi (0.0-1.0, yuksek = daha benzer)
+    
+    Returns:
+        list: {"id", "content", "category", "benzerlik", "tarih"}
+    """
+    try:
+        embedding_vector = _get_embedding(sorgu)
+        if not embedding_vector:
+            return ["⚠️ Embedding modeli yuklu degil, metin aramasina dusuluyor..."] + pg_ara(sorgu, limit)
+        
+        conn = pg_baglan()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, "
+                "1 - (embedding <=> %s::vector) AS benzerlik, "
+                "created_at FROM hermes_memory "
+                "WHERE embedding IS NOT NULL "
+                "AND 1 - (embedding <=> %s::vector) > %s "
+                "ORDER BY benzerlik DESC LIMIT %s",
+                (embedding_vector, embedding_vector, esik, limit)
+            )
+            results = []
+            for r in cur.fetchall():
+                results.append({
+                    "id": r[0],
+                    "content": r[1][:300],
+                    "category": r[2],
+                    "benzerlik": round(r[3], 3),
+                    "tarih": str(r[4])[:10]
+                })
+        conn.close()
+        return results if results else ["Vektor aramasinda eslesme bulunamadi"]
+    except Exception as e:
+        return [f"PG vektor arama hatasi: {str(e)}"]
+
+
 def pg_son(limit: int = 5) -> list:
     """Son eklenen kayitlari getirir."""
     try:
         conn = pg_baglan()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, content, category, created_at FROM hermes_memory "
-            "ORDER BY created_at DESC LIMIT %s", (limit,)
-        )
-        results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
-        cur.close()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, category, created_at FROM hermes_memory "
+                "ORDER BY created_at DESC LIMIT %s", (limit,)
+            )
+            results = [{"id": r[0], "content": r[1][:200], "category": r[2], "tarih": str(r[3])[:10]} for r in cur.fetchall()]
         conn.close()
         return results
     except Exception as e:
@@ -845,4 +928,4 @@ print("   - drive_dosya_listele, drive_dosya_yukle")
 print("   - sheets_oku, sheets_yaz, sheets_ekle")
 print("   - hava_durumu, hatirlatici_kur")
 print("   - beyin_ara, beyin_kaydet")
-print("   - pg_kaydet, pg_ara, pg_son, pg_baglan")
+print("   - pg_kaydet, pg_ara, pg_ara_vector, pg_son, pg_baglan")
