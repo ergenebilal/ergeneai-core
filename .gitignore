@@ -1,0 +1,7 @@
+.env
+*.pickle
+credentials.json
+__pycache__/
+*.pyc
+*.db
+*.db.gz
