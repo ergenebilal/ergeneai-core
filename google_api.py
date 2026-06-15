@@ -5,7 +5,10 @@ Google API entegrasyonu — Gmail, Calendar, Drive, Sheets
 import os
 import pickle
 import datetime
+import threading
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
+from requests.exceptions import RequestException
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
@@ -21,19 +24,34 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 
+# Token okuma/yazma icin thread-safe lock (race condition onleme)
+_token_lock = threading.Lock()
+
 
 def _auth():
     """Google API kimlik dogrulama — token varsa kullan, yoksa olustur."""
     creds = None
 
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "rb") as f:
-            creds = pickle.load(f)
+    with _token_lock:
+        if os.path.exists(TOKEN_FILE):
+            try:
+                with open(TOKEN_FILE, "rb") as f:
+                    creds = pickle.load(f)
+            except (pickle.UnpicklingError, EOFError, OSError) as e:
+                creds = None
+                import sys
+                print(f"⚠️ Token dosyasi bozuk veya okunamadi, yeniden olusturulacak: {e}", file=sys.stderr)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except (RefreshError, RequestException) as e:
+                # Refresh basarisiz — zorla yeniden auth
+                import sys
+                print(f"⚠️ Token refresh basarisiz, yeniden auth gerekiyor: {e}", file=sys.stderr)
+                creds = None
+        if not creds or not creds.valid:
             if not os.path.exists(CREDENTIALS_FILE):
                 return None, "❌ Google credentials.json bulunamadi (~/.google/credentials.json)"
             flow = InstalledAppFlow.from_client_secrets_file(
@@ -57,8 +75,9 @@ def _auth():
             flow.fetch_token(code=kod)
             creds = flow.credentials
 
-        with open(TOKEN_FILE, "wb") as f:
-            pickle.dump(creds, f)
+        with _token_lock:
+            with open(TOKEN_FILE, "wb") as f:
+                pickle.dump(creds, f)
 
     return creds, None
 

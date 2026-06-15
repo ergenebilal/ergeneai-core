@@ -5,9 +5,9 @@ self_evolve.py — Hermes'in kendini geliştiren beyni
 Seviye: EXPERT
 ====================
 Yapabildikleri:
-  1. SCA: tools.py'yi analiz et, eksikleri/hataları/iyileştirmeleri bul
+  1. SCA: ergeneai_tools.py'yi (core/) analiz et, eksik/hataları/iyileştirmeleri bul
   2. SUG: Ne eklenmesi gerektiğini öner ("şu eksik, bunu eklemeliyim")
-  3. GEN: DeepSeek API ile kod üret + test et + tools.py'ye ekle
+  3. GEN: DeepSeek API ile kod üret + test et + ergeneai_tools.py'ye ekle
   4. FIX: Hatalı fonksiyonları oto-düzelt (3 deneme döngüsü)
   5. AUD: Kod kalitesi denetimi (docstring, try/except, type hints)
   6. CHG: Değişiklik geçmişi tut
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.expanduser("~/hermes_data"))
 # ─────────────────────────────────────────────
 # KONFİGÜRASYON
 # ─────────────────────────────────────────────
-TOOLS_PATH = os.path.expanduser("~/hermes_data/tools.py")
+TOOLS_PATH = os.path.expanduser("~/hermes_data/ergeneai_tools.py")
 HATA_LOG = os.path.expanduser("~/hermes_hata_log.txt")
 EVOLVE_LOG = os.path.expanduser("~/hermes_evolve_log.json")
 ENV_PATH = os.path.expanduser("~/.hermes/.env")
@@ -87,7 +87,7 @@ def _evolve_log_ekle(entry):
 
 
 def _tools_oku():
-    """tools.py'nin tam içeriğini ve AST'sini döndür."""
+    """ergeneai_tools.py'nin tam içeriğini ve AST'sini döndür."""
     if not os.path.exists(TOOLS_PATH):
         return None, None
     with open(TOOLS_PATH, "r") as f:
@@ -100,7 +100,7 @@ def _tools_oku():
 
 
 def _tools_yaz(content):
-    """tools.py'ye yaz (yedek alarak)."""
+    """ergeneai_tools.py'ye yaz (yedek alarak)."""
     yedek = TOOLS_PATH + ".bak"
     if os.path.exists(TOOLS_PATH):
         os.replace(TOOLS_PATH, yedek)
@@ -109,7 +109,7 @@ def _tools_yaz(content):
 
 
 def _tools_ekle(kod, kategori=None):
-    """tools.py'nin sonuna, print'lerden önce kod ekle."""
+    """ergeneai_tools.py'nin sonuna, print'lerden önce kod ekle."""
     content, tree = _tools_oku()
     if not content:
         return False
@@ -118,7 +118,7 @@ def _tools_ekle(kod, kategori=None):
     lines = content.split("\n")
     print_start = None
     for i, line in enumerate(lines):
-        if 'print("✅ tools.py' in line or "print('✅ tools.py" in line:
+        if 'print("✅ ergeneai_tools.py' in line or "print('✅ ergeneai_tools.py" in line:
             print_start = i
             break
 
@@ -140,12 +140,12 @@ def _tools_ekle(kod, kategori=None):
 
 
 # ─────────────────────────────────────────────
-# 1. SCA: tools.py ANALİZ MOTORU
+# 1. SCA: ergeneai_tools.py ANALİZ MOTORU
 # ─────────────────────────────────────────────
 
 def analiz_et():
     """
-    tools.py'yi tarar, her fonksiyon için kalite skoru çıkarır,
+    ergeneai_tools.py'yi tarar, her fonksiyon için kalite skoru çıkarır,
     eksik kategorileri, hataları, iyileştirme fırsatlarını raporlar.
 
     Dönüş: {
@@ -157,7 +157,7 @@ def analiz_et():
     """
     content, tree = _tools_oku()
     if not content:
-        return {"hata": "tools.py bulunamadı"}
+        return {"hata": "ergeneai_tools.py bulunamadı"}
 
     sonuc = {
         "fonksiyonlar": [],
@@ -169,7 +169,7 @@ def analiz_et():
     lines = content.split("\n")
 
     if tree is None:
-        sonuc["oneriler"].append("⚠️ tools.py'de syntax hatası var! Düzeltilmeli.")
+        sonuc["oneriler"].append("⚠️ ergeneai_tools.py'de syntax hatası var! Düzeltilmeli.")
         return sonuc
 
     # Mevcut kategorileri bul
@@ -316,7 +316,7 @@ def ne_eklemeliyim():
     oneriler = []
 
     # Genel skor
-    oneriler.append(f"📊 tools.py genel kalite skoru: {analiz['genel_skor']}/1.0")
+    oneriler.append(f"📊 ergeneai_tools.py genel kalite skoru: {analiz['genel_skor']}/1.0")
     if analiz['genel_skor'] < 0.6:
         oneriler.append("   ⚠️ Düşük! İyileştirme gerekiyor.")
 
@@ -349,7 +349,7 @@ def ne_eklemeliyim():
     # Kritik öneri
     oneriler.append(f"\n🎯 **Aciliyet:**")
     if analiz['genel_skor'] < 0.5:
-        oneriler.append("   🔴 KRİTİK: tools.py'nin yarısından fazlası düşük kaliteli")
+        oneriler.append("   🔴 KRİTİK: ergeneai_tools.py'nin yarısından fazlası düşük kaliteli")
     elif analiz['genel_skor'] < 0.7:
         oneriler.append("   🟡 ORTA: Belirli fonksiyonlar iyileştirilmeli")
     else:
@@ -364,14 +364,14 @@ def ne_eklemeliyim():
 
 def kod_uret(fonksiyon_adi, aciklama, kategori=None, ek_bilgi=""):
     """
-    DeepSeek API ile kod üret → test et → tools.py'ye ekle.
+    DeepSeek API ile kod üret → test et → ergeneai_tools.py'ye ekle.
     Hata varsa MAX_FIX_ATTEMPTS kadar düzeltme döngüsü.
 
     Parametreler:
         fonksiyon_adi: Oluşturulacak fonksiyon adı
         aciklama: Ne iş yapacağı (detaylı doğal dil)
         kategori: Hangi kategori altına eklenecek (opsiyonel)
-        ek_bilgi: Kullanabileceği tools.py fonksiyonları, API'ler vb.
+        ek_bilgi: Kullanabileceği ergeneai_tools.py fonksiyonları, API'ler vb.
 
     Dönüş: {"durum": "ok"|"hata", "mesaj": "...", "kod": "..."}
     """
@@ -379,7 +379,7 @@ def kod_uret(fonksiyon_adi, aciklama, kategori=None, ek_bilgi=""):
     if not api_key:
         return {"durum": "hata", "mesaj": "❌ DEEPSEEK_API_KEY bulunamadı"}
 
-    # tools.py içeriğini oku (bağlam için)
+    # ergeneai_tools.py içeriğini oku (bağlam için)
     content, tree = _tools_oku()
     mevcut_fonk_isimleri = []
     mevcut_importlar = []
@@ -395,12 +395,12 @@ def kod_uret(fonksiyon_adi, aciklama, kategori=None, ek_bilgi=""):
                     mevcut_importlar.append(f"{node.module}.{alias.name}")
 
     # DeepSeek prompt'u
-    prompt = f"""Sen Hermes Agent'in kod geliştiricisin. tools.py'ye eklenecek bir Python fonksiyonu yaz.
+    prompt = f"""Sen Hermes Agent'in kod geliştiricisin. ergeneai_tools.py'ye eklenecek bir Python fonksiyonu yaz.
 
 Fonksiyon adı: {fonksiyon_adi}
 Açıklama: {aciklama}
 
-MEVCUT İMPORTLAR (bunlar zaten tools.py'de, tekrar import etme):
+MEVCUT İMPORTLAR (bunlar zaten ergeneai_tools.py'de, tekrar import etme):
 {', '.join(sorted(set(mevcut_importlar)))}
 
 MEVCUT FONKSİYONLAR (bunları çağırabilirsin):
@@ -519,7 +519,7 @@ Fonksiyon kodu:"""
                 except:
                     pass
 
-                # tools.py'ye ekle
+                # ergeneai_tools.py'ye ekle
                 if _tools_ekle(kod, kategori):
                     mesaj = f"✅ Eklendi: {fonksiyon_adi}() — {aciklama[:60]}"
                     _evolve_log_ekle({
@@ -532,7 +532,7 @@ Fonksiyon kodu:"""
                     _telegram_gonder(f"🧬 self_evolve: {mesaj}")
                     return {"durum": "ok", "mesaj": mesaj, "kod": kod}
                 else:
-                    return {"durum": "hata", "mesaj": "❌ tools.py'ye eklenemedi"}
+                    return {"durum": "hata", "mesaj": "❌ ergeneai_tools.py'ye eklenemedi"}
 
             else:
                 hata = result.stderr[:1000] or result.stdout[:1000]
@@ -562,7 +562,7 @@ Fonksiyon kodu:"""
 def hata_coz(fonksiyon_adi, hata_mesaji):
     """
     Hata veren bir fonksiyonu DeepSeek'e gönderip düzeltme dener.
-    Eski kodu yedekler, düzeltilmiş kodu test edip tools.py'ye yazar.
+    Eski kodu yedekler, düzeltilmiş kodu test edip ergeneai_tools.py'ye yazar.
 
     Parametreler:
         fonksiyon_adi: Düzeltilecek fonksiyon adı
@@ -572,10 +572,10 @@ def hata_coz(fonksiyon_adi, hata_mesaji):
     """
     content, tree = _tools_oku()
     if not content:
-        return {"durum": "hata", "mesaj": "tools.py bulunamadı"}
+        return {"durum": "hata", "mesaj": "ergeneai_tools.py bulunamadı"}
 
     if tree is None:
-        return {"durum": "hata", "mesaj": "tools.py syntax hatası var"}
+        return {"durum": "hata", "mesaj": "ergeneai_tools.py syntax hatası var"}
 
     # AST'den fonksiyon kaynak kodunu bul
     for node in ast.walk(tree):
@@ -637,7 +637,7 @@ Düzeltilmiş fonksiyonu yaz. Sadece kod, açıklama yapma."""
                 )
 
                 if result.returncode == 0:
-                    # tools.py'de eski kodu yenisiyle değiştir
+                    # ergeneai_tools.py'de eski kodu yenisiyle değiştir
                     yeni_lines = content.split("\n")
                     yeni_lines[start:end] = yeni_kod.split("\n")
                     _tools_yaz("\n".join(yeni_lines))
@@ -666,7 +666,7 @@ Düzeltilmiş fonksiyonu yaz. Sadece kod, açıklama yapma."""
 
 def kod_denetle(fonksiyon_adi=None):
     """
-    Belirli bir fonksiyonun veya tüm tools.py'nin kod kalitesini denetler.
+    Belirli bir fonksiyonun veya tüm ergeneai_tools.py'nin kod kalitesini denetler.
 
     Parametreler:
         fonksiyon_adi: Sadece bu fonksiyonu denetle (None = tümü)
@@ -792,7 +792,7 @@ def temizlik_oner():
 def otonom_taram():
     """
     Otomatik tarama — cron'dan çağrılır.
-    1. tools.py'yi analiz et
+    1. ergeneai_tools.py'yi analiz et
     2. Eksik/hatalı bir şey varsa Telegram'a bildir
     3. Kritikse otomatik düzelt
 
@@ -824,7 +824,7 @@ def otonom_taram():
     rapor.append("")
     if analiz['genel_skor'] < 0.5:
         rapor.append("🔴 KRİTİK: İyileştirme gerekli!")
-        _telegram_gonder("🧬 self_evolve: KRİTİK — tools.py kalite skoru çok düşük!")
+        _telegram_gonder("🧬 self_evolve: KRİTİK — ergeneai_tools.py kalite skoru çok düşük!")
     elif analiz['genel_skor'] < 0.7:
         rapor.append("🟡 ORTA: Belirli fonksiyonlar iyileştirilmeli")
     else:

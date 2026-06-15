@@ -1,9 +1,9 @@
 #!/usr/bin/env python3.11
 """
-n8n Bridge v2 — Embedding Daemon baglantili
-===========================================
+n8n Bridge v3 — Embedding Daemon baglantili, core.db ile dual-path
+==================================================================
 Oncelikle yerel Embedding Daemon'a (localhost:8767) istek atar.
-Daemon yoksa kendi modelini yukler (fallback).
+Daemon yoksa direkt PostgreSQL'e yazar (fallback).
 
 KULLANIM (n8n Execute Command Node):
     python3.11 /home/hermes/hermes_data/n8n_bridge.py --action save --input /tmp/input.json
@@ -21,34 +21,31 @@ import traceback
 import urllib.request
 import urllib.error
 
+# core.db'den paylasilan fonksiyonlari import et
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.db import PG_CONFIG, get_pg_connection, SEARCH_SQL, format_search_result
+
 DAEMON_URL = "http://localhost:8767"
-PG_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "dbname": "ergeneai",
-    "user": "hermes",
-    "password": "hermes_2026"
-}
 
 
-def _daemon_istek(endpoint: str, data: dict) -> dict:
+def _daemon_istek(endpoint: str, data: dict) -> dict | None:
     """Embedding Daemon'a POST istek atar."""
     try:
         req = urllib.request.Request(
             f"{DAEMON_URL}{endpoint}",
             data=json.dumps(data).encode("utf-8"),
             headers={"Content-Type": "application/json"},
-            method="POST"
+            method="POST",
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.ConnectionRefusedError, urllib.error.URLError):
+    except urllib.error.URLError:
         return None
     except Exception as e:
         return {"hata": str(e)}
 
 
-def _embed_daemon(text: str):
+def _embed_daemon(text: str) -> list | None:
     """Daemon'dan embedding alir."""
     result = _daemon_istek("/embed", {"text": text})
     if result and "vector" in result:
@@ -56,23 +53,18 @@ def _embed_daemon(text: str):
     return None
 
 
-def _pg_baglan():
-    """PostgreSQL baglantisi."""
-    import psycopg2
-    return psycopg2.connect(**PG_CONFIG)
-
-
-def _embed_local(text: str):
+def _embed_local(text: str) -> list | None:
     """Fallback: direkt model yukle."""
     try:
         from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
         return model.encode(text).tolist()
     except Exception:
         return None
 
 
-def _get_embedding(text: str):
+def _get_embedding(text: str) -> list | None:
     """Once daemon, yoksa direkt model."""
     v = _embed_daemon(text)
     if v:
@@ -94,17 +86,17 @@ def save_memory(content: str, category: str = "genel") -> str:
     # Fallback: direkt PG
     embedding_vector = _get_embedding(content)
     try:
-        conn = _pg_baglan()
+        conn = get_pg_connection()
         with conn.cursor() as cur:
             if embedding_vector:
                 cur.execute(
                     "INSERT INTO hermes_memory (content, category, embedding) VALUES (%s, %s, %s)",
-                    (content, category, embedding_vector)
+                    (content, category, embedding_vector),
                 )
             else:
                 cur.execute(
                     "INSERT INTO hermes_memory (content, category) VALUES (%s, %s)",
-                    (content, category)
+                    (content, category),
                 )
             conn.commit()
         conn.close()
@@ -119,7 +111,9 @@ def search_memory(sorgu: str, limit: int = 5, esik: float = 0.3) -> str:
         return json.dumps({"hata": "Bos sorgu"})
 
     # Daemon'a direkt search iste
-    result = _daemon_istek("/memory/search", {"sorgu": sorgu, "limit": limit, "esik": esik})
+    result = _daemon_istek(
+        "/memory/search", {"sorgu": sorgu, "limit": limit, "esik": esik}
+    )
     if result and "sonuc" in result:
         return json.dumps(result["sonuc"], ensure_ascii=False)
 
@@ -128,24 +122,10 @@ def search_memory(sorgu: str, limit: int = 5, esik: float = 0.3) -> str:
     if not embedding_vector:
         return json.dumps({"hata": "Embedding alinamadi"})
     try:
-        conn = _pg_baglan()
+        conn = get_pg_connection()
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, content, category, "
-                "1 - (embedding <=> %s::vector) AS benzerlik, "
-                "created_at FROM hermes_memory "
-                "WHERE embedding IS NOT NULL "
-                "AND 1 - (embedding <=> %s::vector) > %s "
-                "ORDER BY benzerlik DESC LIMIT %s",
-                (embedding_vector, embedding_vector, esik, limit)
-            )
-            results = []
-            for r in cur.fetchall():
-                results.append({
-                    "id": r[0], "content": r[1][:500],
-                    "category": r[2], "benzerlik": round(r[3], 3),
-                    "tarih": str(r[4])[:10]
-                })
+            cur.execute(SEARCH_SQL, (embedding_vector, embedding_vector, esik, limit))
+            results = [format_search_result(r) for r in cur.fetchall()]
         conn.close()
         return json.dumps(results, ensure_ascii=False)
     except Exception as e:
@@ -154,6 +134,7 @@ def search_memory(sorgu: str, limit: int = 5, esik: float = 0.3) -> str:
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--action", required=True, choices=["save", "search"])
     parser.add_argument("--input", help="JSON dosyasi")

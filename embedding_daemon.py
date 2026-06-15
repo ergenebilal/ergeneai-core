@@ -1,9 +1,9 @@
 #!/usr/bin/env python3.11
 """
-Embedding Daemon — Hermes Hafiza Motoru API Sunucusu
-====================================================
+Embedding Daemon — Hermes Hafiza Motoru API Sunucusu (v2)
+=========================================================
 - sentence-transformers modelini RAM'de sıcak tutar (0 ms gecikme)
-- PostgreSQL'e vektörlü kayıt/arama yapar
+- PostgreSQL'e vektörlü kayıt/arama yapar (core.db uzerinden)
 - n8n HTTP Request node ile direkt çağrılır (dosya paylaşımı GEREKMEZ)
 - Port: 8767 (MCP 8765, Nanobot 8766'nın yanı)
 
@@ -25,32 +25,25 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
-# === PostgreSQL ===
-PG_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "dbname": "ergeneai",
-    "user": "hermes",
-    "password": "hermes_2026"
-}
+# core.db'den paylasilan fonksiyonlari import et
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.db import PG_CONFIG, get_pg_connection, SEARCH_SQL, format_search_result
 
 import psycopg2
 
 # === Embedding Model (RAM'de sıcak) ===
 _model = None
 
+
 def _get_model():
     global _model
     if _model is None:
         print("[DAEMON] Model yukleniyor...")
         from sentence_transformers import SentenceTransformer
+
         _model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
         print(f"[DAEMON] Model hazir! (384 boyut)")
     return _model
-
-
-def _pg_baglan():
-    return psycopg2.connect(**PG_CONFIG)
 
 
 class EmbeddingAPI(BaseHTTPRequestHandler):
@@ -77,12 +70,14 @@ class EmbeddingAPI(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/health":
-            self._send_json({
-                "status": "ok",
-                "model_loaded": _model is not None,
-                "port": 8767,
-                "uptime": f"{time.time() - start_time:.0f}s"
-            })
+            self._send_json(
+                {
+                    "status": "ok",
+                    "model_loaded": _model is not None,
+                    "port": 8767,
+                    "uptime": f"{time.time() - start_time:.0f}s",
+                }
+            )
         else:
             self._send_json({"hata": f"Bilinmeyen endpoint: {path}"}, 404)
 
@@ -111,11 +106,7 @@ class EmbeddingAPI(BaseHTTPRequestHandler):
             return {"hata": "Bos metin gonderilemez"}
         model = _get_model()
         vector = model.encode(text).tolist()
-        return {
-            "vector": vector,
-            "boyut": len(vector),
-            "metin_kesiti": text[:100]
-        }
+        return {"vector": vector, "boyut": len(vector), "metin_kesiti": text[:100]}
 
     def _handle_save(self, data):
         content = data.get("content", "").strip()
@@ -125,11 +116,11 @@ class EmbeddingAPI(BaseHTTPRequestHandler):
 
         model = _get_model()
         embedding_vector = model.encode(content).tolist()
-        conn = _pg_baglan()
+        conn = get_pg_connection()
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO hermes_memory (content, category, embedding) VALUES (%s, %s, %s)",
-                (content, category, embedding_vector)
+                (content, category, embedding_vector),
             )
             conn.commit()
         conn.close()
@@ -144,26 +135,13 @@ class EmbeddingAPI(BaseHTTPRequestHandler):
 
         model = _get_model()
         embedding_vector = model.encode(sorgu).tolist()
-        conn = _pg_baglan()
+        conn = get_pg_connection()
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, content, category, "
-                "1 - (embedding <=> %s::vector) AS benzerlik, "
-                "created_at FROM hermes_memory "
-                "WHERE embedding IS NOT NULL "
-                "AND 1 - (embedding <=> %s::vector) > %s "
-                "ORDER BY benzerlik DESC LIMIT %s",
-                (embedding_vector, embedding_vector, esik, limit)
+                SEARCH_SQL,
+                (embedding_vector, embedding_vector, esik, limit),
             )
-            results = []
-            for r in cur.fetchall():
-                results.append({
-                    "id": r[0],
-                    "content": r[1][:500],
-                    "category": r[2],
-                    "benzerlik": round(r[3], 3),
-                    "tarih": str(r[4])[:10]
-                })
+            results = [format_search_result(r) for r in cur.fetchall()]
         conn.close()
         return {"sonuc": results, "adet": len(results)}
 
@@ -176,21 +154,23 @@ def main():
     host = "0.0.0.0"
 
     print(f"╔══════════════════════════════════╗")
-    print(f"║   HERMES EMBEDDING DAEMON v1.0   ║")
+    print(f"║   HERMES EMBEDDING DAEMON v2.0   ║")
     print(f"╚══════════════════════════════════╝")
     print(f"[DAEMON] Port: {port}")
     print(f"[DAEMON] Model: paraphrase-multilingual-MiniLM-L12-v2")
-    print(f"[DAEMON] PostgreSQL: {PG_CONFIG['host']}:{PG_CONFIG['port']}/{PG_CONFIG['dbname']}")
+    print(
+        f"[DAEMON] PostgreSQL: {PG_CONFIG['host']}:{PG_CONFIG['port']}/{PG_CONFIG['dbname']}"
+    )
 
     # Model'i baslangicta yukle
     print("[DAEMON] Model ön yükleme yapiliyor...")
     t0 = time.time()
     _get_model()
-    print(f"[DAEMON] Model ön yükleme tamam ({time.time()-t0:.1f}s)")
+    print(f"[DAEMON] Model ön yükleme tamam ({time.time() - t0:.1f}s)")
 
     # PostgreSQL baglanti testi
     try:
-        conn = _pg_baglan()
+        conn = get_pg_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM hermes_memory")
             count = cur.fetchone()[0]
