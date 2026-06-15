@@ -1011,5 +1011,196 @@
       document.body.classList.remove("no-js");
     });
   </script>
+
+<!-- ErgeneAI Chat Widget -->
+<div id="ergeneai-chat-widget" style="all:initial">
+<style>
+  #ergeneai-chat-widget * { margin:0; padding:0; box-sizing:border-box; font-family:Inter, -apple-system, system-ui, sans-serif; }
+  #ergeneai-chat-widget .eai-bubble {
+    position:fixed; bottom:24px; right:24px; z-index:999999;
+    width:56px; height:56px; border-radius:50%;
+    background:#81e36f; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 24px rgba(129,227,111,0.3);
+    transition:transform .2s, box-shadow .2s;
+  }
+  #ergeneai-chat-widget .eai-bubble:hover { transform:scale(1.08); box-shadow:0 8px 32px rgba(129,227,111,0.4); }
+  #ergeneai-chat-widget .eai-bubble svg { width:26px; height:26px; fill:#050807; }
+  #ergeneai-chat-widget .eai-bubble-close { display:none; }
+  #ergeneai-chat-widget .eai-bubble.open .eai-bubble-open { display:none; }
+  #ergeneai-chat-widget .eai-bubble.open .eai-bubble-close { display:block; }
+
+  #ergeneai-chat-widget .eai-panel {
+    position:fixed; bottom:92px; right:24px; z-index:999998;
+    width:360px; max-height:560px; height:70vh;
+    background:#0c1411; border:1px solid rgba(221,255,231,0.11);
+    border-radius:16px; box-shadow:0 24px 80px rgba(0,0,0,0.5);
+    display:none; flex-direction:column; overflow:hidden;
+  }
+  #ergeneai-chat-widget .eai-panel.open { display:flex; }
+
+  #ergeneai-chat-widget .eai-header {
+    padding:16px 18px; border-bottom:1px solid rgba(221,255,231,0.08);
+    display:flex; align-items:center; gap:10px;
+  }
+  #ergeneai-chat-widget .eai-avatar {
+    width:32px; height:32px; border-radius:50%; background:#81e36f;
+    display:flex; align-items:center; justify-content:center; color:#050807;
+    font-weight:800; font-size:14px;
+  }
+  #ergeneai-chat-widget .eai-header-text { flex:1; }
+  #ergeneai-chat-widget .eai-header-text strong { color:#f4f7f3; font-size:14px; }
+  #ergeneai-chat-widget .eai-header-text span { color:#aeb8b1; font-size:12px; }
+  #ergeneai-chat-widget .eai-header-close {
+    width:28px; height:28px; border:none; background:rgba(255,255,255,0.06);
+    border-radius:8px; color:#aeb8b1; cursor:pointer; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  #ergeneai-chat-widget .eai-messages {
+    flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px;
+  }
+  #ergeneai-chat-widget .eai-msg {
+    max-width:85%; padding:10px 14px; border-radius:12px;
+    font-size:13.5px; line-height:1.55; animation:fadeIn .25s;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  #ergeneai-chat-widget .eai-msg.bot {
+    align-self:flex-start; background:rgba(255,255,255,0.06); color:#f4f7f3;
+    border-bottom-left-radius:4px;
+  }
+  #ergeneai-chat-widget .eai-msg.user {
+    align-self:flex-end; background:#81e36f; color:#050807;
+    border-bottom-right-radius:4px;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing {
+    display:flex; gap:4px; padding:4px 0;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing span {
+    width:6px; height:6px; border-radius:50%; background:#aeb8b1;
+    animation:typing 1.2s infinite;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing span:nth-child(2) { animation-delay:.2s; }
+  #ergeneai-chat-widget .eai-msg .eai-typing span:nth-child(3) { animation-delay:.4s; }
+  @keyframes typing { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  #ergeneai-chat-widget .eai-input-wrap {
+    padding:12px 14px; border-top:1px solid rgba(221,255,231,0.08);
+    display:flex; gap:8px;
+  }
+  #ergeneai-chat-widget .eai-input-wrap input {
+    flex:1; padding:10px 14px; border:1px solid rgba(221,255,231,0.12);
+    border-radius:10px; background:rgba(255,255,255,0.04); color:#f4f7f3;
+    font-size:13.5px; outline:none;
+  }
+  #ergeneai-chat-widget .eai-input-wrap input::placeholder { color:#738077; }
+  #ergeneai-chat-widget .eai-input-wrap input:focus { border-color:#81e36f; }
+  #ergeneai-chat-widget .eai-input-wrap button {
+    width:38px; height:38px; border:none; border-radius:10px;
+    background:#81e36f; color:#050807; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+    transition:background .2s;
+  }
+  #ergeneai-chat-widget .eai-input-wrap button:hover { background:#9af28a; }
+  #ergeneai-chat-widget .eai-input-wrap button:disabled { opacity:.4; cursor:default; }
+
+  @media (max-width:480px) {
+    #ergeneai-chat-widget .eai-panel { width:calc(100vw - 24px); right:12px; bottom:84px; height:65vh; }
+    #ergeneai-chat-widget .eai-bubble { bottom:16px; right:16px; }
+  }
+</style>
+
+<button class="eai-bubble" onclick="toggleChat()" aria-label="ErgeneAI asistan">
+  <svg class="eai-bubble-open" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+  <svg class="eai-bubble-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+</button>
+
+<div class="eai-panel" id="eai-panel">
+  <div class="eai-header">
+    <div class="eai-avatar">E</div>
+    <div class="eai-header-text">
+      <strong>ErgeneAI Asistan</strong>
+      <span>🟢 Çevrimiçi</span>
+    </div>
+    <button class="eai-header-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="eai-messages" id="eai-messages">
+    <div class="eai-msg bot">👋 Merhaba! Ben ErgeneAI asistanıyım. İşletmenize nasıl bir otomasyon çözümü arıyorsunuz?</div>
+  </div>
+  <div class="eai-input-wrap">
+    <input type="text" id="eai-input" placeholder="Mesajınızı yazın..." onkeydown="if(event.key==='Enter') sendMsg()">
+    <button id="eai-send-btn" onclick="sendMsg()">➤</button>
+  </div>
+</div>
+
+<script>
+const API_URL = 'https://ergeneai.com/api/chat';
+let msgId = 0;
+
+function toggleChat() {
+  const bubble = document.querySelector('#ergeneai-chat-widget .eai-bubble');
+  const panel = document.getElementById('eai-panel');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  bubble.classList.toggle('open');
+  if (!isOpen) setTimeout(() => document.getElementById('eai-input').focus(), 300);
+}
+
+function addMsg(text, role) {
+  const msgs = document.getElementById('eai-messages');
+  const div = document.createElement('div');
+  div.className = 'eai-msg ' + role;
+  div.id = 'msg-' + (++msgId);
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('eai-messages');
+  const div = document.createElement('div');
+  div.className = 'eai-msg bot';
+  div.id = 'eai-typing';
+  div.innerHTML = '<div class="eai-typing"><span></span><span></span><span></span></div>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hideTyping() {
+  const el = document.getElementById('eai-typing');
+  if (el) el.remove();
+}
+
+async function sendMsg() {
+  const input = document.getElementById('eai-input');
+  const btn = document.getElementById('eai-send-btn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  btn.disabled = true;
+  addMsg(text, 'user');
+  showTyping();
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    hideTyping();
+    if (!res.ok) { addMsg('Bağlantı hatası. Lütfen daha sonra tekrar deneyin.', 'bot'); return; }
+    const data = await res.json();
+    addMsg(data.reply || data.message || 'Yanıt alınamadı.', 'bot');
+  } catch(e) {
+    hideTyping();
+    addMsg('Bağlantı hatası. Lütfen daha sonra tekrar deneyin.', 'bot');
+  }
+  btn.disabled = false;
+}
+</script>
+</div>
+
 </body>
 </html>
