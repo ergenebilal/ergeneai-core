@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ergene AI, işletmeler için müşteri iletişimi, randevu, lead takibi ve tekrar eden operasyonlara yönelik AI otomasyon çözümleri sunar.">
+  <title>Ergene AI | İşletmeler için AI Otomasyon Çözümleri</title>
+  <style>
+    :root {
+      --bg: #050807;
+      --bg-soft: #08110d;
+      --surface: #0c1411;
+      --surface-strong: #101b16;
+      --line: rgba(221, 255, 231, 0.11);
+      --line-strong: rgba(132, 231, 126, 0.28);
+      --text: #f4f7f3;
+      --muted: #aeb8b1;
+      --subtle: #738077;
+      --accent: #81e36f;
+      --accent-strong: #9af28a;
+      --accent-dark: #16351f;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+      --max: 1120px;
+      --header-height: 72px;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 70% 12%, rgba(129, 227, 111, 0.1), transparent 24rem),
+        linear-gradient(180deg, #040706 0%, #07100c 46%, #050807 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      line-height: 1.5;
+      text-rendering: optimizeLegibility;
+    }
+
+    body.menu-open {
+      overflow: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      min-height: var(--header-height);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      background: rgba(5, 8, 7, 0.82);
+      backdrop-filter: blur(18px);
+    }
+
+    .header-inner {
+      width: min(100% - 32px, var(--max));
+      min-height: var(--header-height);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      min-height: 44px;
+      font-weight: 740;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 58px;
+      height: 58px;
+      display: block;
+      border: 1px solid var(--line-strong);
+      object-fit: cover;
+      object-position: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .desktop-nav {
+      display: none;
+      align-items: center;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 0.91rem;
+      font-weight: 560;
+    }
+
+    .desktop-nav a,
+    .footer-links a,
+    .meta-link {
+      transition: color 180ms ease;
+    }
+
+    .desktop-nav a:hover,
+    .footer-links a:hover,
+    .meta-link:hover {
+      color: var(--accent);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-toggle {
+      width: 44px;
+      height: 44px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .menu-toggle span,
+    .menu-toggle::before,
+    .menu-toggle::after {
+      content: "";
+      width: 18px;
+      height: 2px;
+      display: block;
+      background: currentColor;
+      transition: transform 180ms ease, opacity 180ms ease;
+    }
+
+    .menu-toggle span {
+      margin: 4px 0;
+    }
+
+    .menu-toggle[aria-expanded="true"]::before {
+      transform: translateY(6px) rotate(45deg);
+    }
+
+    .menu-toggle[aria-expanded="true"] span {
+      opacity: 0;
+    }
+
+    .menu-toggle[aria-expanded="true"]::after {
+      transform: translateY(-6px) rotate(-45deg);
+    }
+
+    .mobile-nav {
+      position: fixed;
+      inset: var(--header-height) 0 auto 0;
+      z-index: 19;
+      display: grid;
+      gap: 6px;
+      padding: 18px 16px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(5, 8, 7, 0.97);
+      transform: translateY(-110%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 220ms ease, opacity 220ms ease;
+    }
+
+    .mobile-nav[data-open="true"] {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .mobile-nav a {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      color: var(--text);
+      font-weight: 650;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    main {
+      overflow: hidden;
+    }
+
+    .section {
+      padding: 72px 0;
+    }
+
+    .container {
+      width: min(100% - 32px, var(--max));
+      margin: 0 auto;
+    }
+
+    .hero {
+      position: relative;
+      padding: 72px 0 64px;
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 52px 52px;
+      mask-image: radial-gradient(circle at 72% 35%, black 0, transparent 48%);
+      opacity: 0.7;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -120px;
+      top: 78px;
+      z-index: -1;
+      width: min(78vw, 480px);
+      aspect-ratio: 1;
+      border: 1px solid rgba(129, 227, 111, 0.11);
+      background:
+        linear-gradient(135deg, transparent 0 44%, rgba(129, 227, 111, 0.11) 44% 45%, transparent 45%),
+        radial-gradient(circle at 42% 44%, rgba(129, 227, 111, 0.12), transparent 34%),
+        rgba(255, 255, 255, 0.015);
+      transform: rotate(-8deg);
+      opacity: 0.76;
+    }
+
+    .hero-grid {
+      display: grid;
+      gap: 42px;
+      align-items: center;
+    }
+
+    .hero-copy {
+      max-width: 720px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      max-width: 780px;
+      font-size: clamp(2.55rem, 11vw, 5.8rem);
+      line-height: 0.98;
+      letter-spacing: 0;
+      font-weight: 780;
+    }
+
+    .hero p {
+      margin: 24px 0 0;
+      max-width: 630px;
+      color: var(--muted);
+      font-size: clamp(1.03rem, 2.7vw, 1.28rem);
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .btn {
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 18px;
+      border: 1px solid transparent;
+      font-size: 0.94rem;
+      font-weight: 720;
+      line-height: 1;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, color 180ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #061007;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-strong);
+      border-color: var(--accent-strong);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-color: var(--line);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--line-strong);
+      color: var(--accent-strong);
+    }
+
+    .header-cta {
+      display: none;
+    }
+
+    .signal-panel {
+      display: grid;
+      gap: 18px;
+      max-width: 420px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+      box-shadow: var(--shadow);
+    }
+
+    .signal-line {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .signal-line::before {
+      content: "";
+      width: 11px;
+      height: 11px;
+      flex: 0 0 11px;
+      border: 2px solid var(--accent);
+      background: rgba(129, 227, 111, 0.11);
+    }
+
+    .signal-line span {
+      height: 1px;
+      flex: 1;
+      background: linear-gradient(90deg, var(--line-strong), transparent);
+    }
+
+    .section-head {
+      max-width: 660px;
+      margin-bottom: 30px;
+    }
+
+    .section-head h2,
+    .cta h2 {
+      margin: 0;
+      font-size: clamp(1.85rem, 6vw, 3.5rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+      font-weight: 760;
+    }
+
+    .section-head p,
+    .cta p,
+    .trust-copy p {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.75;
+    }
+
+    .benefits {
+      display: grid;
+      gap: 16px;
+    }
+
+    .benefit {
+      padding: 22px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .benefit:last-child {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .benefit h3,
+    .service-card h3,
+    .step h3 {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.35;
+      font-weight: 720;
+    }
+
+    .benefit p,
+    .service-card p,
+    .step p,
+    .audience-list li {
+      color: var(--muted);
+      font-size: 0.96rem;
+      line-height: 1.65;
+    }
+
+    .benefit p,
+    .service-card p,
+    .step p {
+      margin: 10px 0 0;
+    }
+
+    .services {
+      display: grid;
+      gap: 14px;
+    }
+
+    .service-card {
+      min-height: 156px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.028);
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .service-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--line-strong);
+      background: rgba(129, 227, 111, 0.045);
+    }
+
+    .service-card::before {
+      content: "";
+      width: 28px;
+      height: 2px;
+      display: block;
+      margin-bottom: 20px;
+      background: var(--accent);
+    }
+
+    .process {
+      counter-reset: step;
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .step {
+      counter-increment: step;
+      display: grid;
+      gap: 12px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .step::before {
+      content: "0" counter(step);
+      color: var(--accent);
+      font-size: 0.84rem;
+      font-weight: 780;
+      letter-spacing: 0.04em;
+    }
+
+    .audience-wrap {
+      display: grid;
+      gap: 30px;
+      align-items: start;
+    }
+
+    .audience-list {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .audience-list li {
+      position: relative;
+      padding: 16px 16px 16px 42px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .audience-list li::before {
+      content: "";
+      position: absolute;
+      left: 18px;
+      top: 24px;
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+    }
+
+    .trust {
+      padding-top: 18px;
+      padding-bottom: 18px;
+    }
+
+    .trust-band {
+      display: grid;
+      gap: 24px;
+      padding: 28px 0;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .trust-copy {
+      max-width: 760px;
+    }
+
+    .trust-copy h2 {
+      margin: 0;
+      font-size: clamp(1.55rem, 5vw, 2.5rem);
+      line-height: 1.15;
+    }
+
+    .trust-note {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      width: fit-content;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      color: var(--accent-strong);
+      background: rgba(129, 227, 111, 0.065);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .cta {
+      padding: 78px 0 76px;
+    }
+
+    .cta-panel {
+      display: grid;
+      gap: 32px;
+      padding: 30px 20px;
+      border: 1px solid var(--line-strong);
+      background:
+        linear-gradient(135deg, rgba(129, 227, 111, 0.085), transparent 42%),
+        rgba(255, 255, 255, 0.035);
+      box-shadow: var(--shadow);
+    }
+
+    .contact-actions {
+      display: grid;
+      gap: 12px;
+    }
+
+    .contact-actions .btn {
+      justify-content: flex-start;
+      min-height: 54px;
+    }
+
+    .contact-meta {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .contact-meta a {
+      color: var(--text);
+    }
+
+    .site-footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .footer-inner {
+      width: min(100% - 32px, var(--max));
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .footer-brand {
+      color: var(--text);
+      font-weight: 760;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 20px;
+    }
+
+    .reveal {
+      opacity: 1;
+      transform: none;
+    }
+
+    body.reveal-ready .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 520ms ease, transform 520ms ease;
+    }
+
+    body.reveal-ready .reveal.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    body.reveal-ready .hero .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+
+      body.reveal-ready .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @media (min-width: 560px) {
+      .actions,
+      .contact-actions {
+        grid-template-columns: repeat(2, minmax(0, max-content));
+        display: grid;
+      }
+
+      .actions {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+
+      .contact-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .contact-actions .btn {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 720px) {
+      .container,
+      .header-inner,
+      .footer-inner {
+        width: min(100% - 48px, var(--max));
+      }
+
+      .section {
+        padding: 96px 0;
+      }
+
+      .hero {
+        padding: 108px 0 88px;
+      }
+
+      .benefits {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .benefit,
+      .benefit:last-child {
+        border: 0;
+        border-right: 1px solid var(--line);
+        padding: 26px 22px 26px 0;
+      }
+
+      .benefit:last-child {
+        border-right: 0;
+        padding-left: 8px;
+      }
+
+      .services {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .process {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-bottom: 1px solid var(--line);
+      }
+
+      .step {
+        padding: 26px 20px 26px 0;
+        border-bottom: 0;
+        border-right: 1px solid var(--line);
+      }
+
+      .step:last-child {
+        border-right: 0;
+      }
+
+      .audience-wrap,
+      .trust-band,
+      .cta-panel,
+      .footer-inner {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .footer-inner {
+        align-items: start;
+      }
+
+      .footer-links {
+        justify-content: flex-end;
+      }
+    }
+
+    @media (min-width: 920px) {
+      .desktop-nav,
+      .header-cta {
+        display: inline-flex;
+      }
+
+      .menu-toggle,
+      .mobile-nav {
+        display: none;
+      }
+
+      .hero-grid {
+        grid-template-columns: minmax(0, 1fr) 360px;
+      }
+
+      .signal-panel {
+        justify-self: end;
+      }
+
+      .services {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      .service-card {
+        min-height: 210px;
+      }
+
+      .cta-panel {
+        padding: 44px;
+      }
+    }
+  </style>
+</head>
+<body class="no-js">
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="Ergene AI ana sayfa">
+        <img class="brand-mark" src="assets/ergene-ai-logo.png" alt="Ergene AI" width="58" height="58">
+      </a>
+
+      <nav class="desktop-nav" aria-label="Ana menü">
+        <a href="#ne-sunuyoruz">Ne Sunuyoruz</a>
+        <a href="#hizmetlerimiz">Hizmetlerimiz</a>
+        <a href="#surec">Süreç</a>
+        <a href="#iletisim">İletişim</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="btn btn-primary header-cta" href="#iletisim">İletişime Geçin</a>
+        <button class="menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false" aria-controls="mobile-nav">
+          <span aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+    <nav class="mobile-nav" id="mobile-nav" data-open="false" aria-label="Mobil menü">
+      <a href="#ne-sunuyoruz">Ne Sunuyoruz</a>
+      <a href="#hizmetlerimiz">Hizmetlerimiz</a>
+      <a href="#surec">Süreç</a>
+      <a href="#iletisim">İletişim</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <h1 id="hero-title">Operasyonel yükü azaltan akıllı sistemler.</h1>
+          <p>Müşteri iletişimini, randevu süreçlerini ve tekrar eden operasyonları daha hızlı, daha düzenli ve daha verimli hale getiriyoruz.</p>
+          <div class="actions" aria-label="Ana işlemler">
+            <a class="btn btn-primary" href="#hizmetlerimiz">Hizmetlerimizi İnceleyin</a>
+            <a class="btn btn-secondary" href="#iletisim">İletişime Geçin</a>
+          </div>
+        </div>
+
+        <div class="signal-panel reveal" aria-label="Ergene AI çalışma odağı">
+          <div class="signal-line">Mesaj akışları <span aria-hidden="true"></span></div>
+          <div class="signal-line">Randevu hatırlatmaları <span aria-hidden="true"></span></div>
+          <div class="signal-line">Lead takip düzeni <span aria-hidden="true"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="ne-sunuyoruz" aria-labelledby="offer-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2 id="offer-title">Ne sunuyoruz?</h2>
+          <p>İşletmenizin günlük akışını sadeleştiren, müşteriye daha hızlı yanıt vermenizi sağlayan ve tekrar eden işleri azaltan AI otomasyon yapıları kuruyoruz.</p>
+        </div>
+
+        <div class="benefits">
+          <article class="benefit reveal">
+            <h3>Müşteri iletişimini otomatikleştiriyoruz</h3>
+            <p>Sık gelen mesajları daha düzenli karşılayan, doğru bilgiyi hızlı ileten sistemler tasarlıyoruz.</p>
+          </article>
+          <article class="benefit reveal">
+            <h3>Operasyonel yükü azaltıyoruz</h3>
+            <p>Randevu, hatırlatma ve takip gibi tekrar eden işleri otomasyonla daha kontrollü hale getiriyoruz.</p>
+          </article>
+          <article class="benefit reveal">
+            <h3>İş süreçlerini daha verimli hale getiriyoruz</h3>
+            <p>İşletmenize özel akışlarla zaman kaybını azaltıyor, ekibinizin önemli işlere odaklanmasını sağlıyoruz.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="hizmetlerimiz" aria-labelledby="services-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2 id="services-title">Hizmetlerimiz</h2>
+          <p>Her çözümü işletmenizin gerçek ihtiyacına göre planlıyor, sade ve sürdürülebilir bir sistem olarak kuruyoruz.</p>
+        </div>
+
+        <div class="services">
+          <article class="service-card reveal">
+            <h3>AI müşteri mesaj otomasyonu</h3>
+            <p>Müşteri sorularını hızlı ve tutarlı yanıtlayan mesaj akışları kuruyoruz.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>Randevu ve hatırlatma sistemleri</h3>
+            <p>Randevu süreçlerini daha düzenli takip eden hatırlatma yapıları oluşturuyoruz.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>Lead toplama ve takip otomasyonu</h3>
+            <p>Yeni talepleri kaydeden ve takip sürecini kaçırmadan ilerleten akışlar hazırlıyoruz.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>Instagram ve WhatsApp otomasyon çözümleri</h3>
+            <p>Sosyal mesajlaşma kanallarını daha hızlı ve düzenli yönetmenize yardımcı oluyoruz.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>İşletmeye özel AI süreç kurulumu</h3>
+            <p>Mevcut çalışma düzeninize uygun, ihtiyaca göre şekillenen AI sistemleri kuruyoruz.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="surec" aria-labelledby="process-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2 id="process-title">Nasıl çalışıyoruz?</h2>
+          <p>Önce ihtiyacı netleştiriyor, sonra işletmenize uygun otomasyon yapısını sade adımlarla hayata geçiriyoruz.</p>
+        </div>
+
+        <div class="process">
+          <article class="step reveal">
+            <h3>İhtiyacı analiz ediyoruz</h3>
+            <p>Mevcut iş akışınızı, tekrar eden işleri ve iletişim noktalarını birlikte değerlendiriyoruz.</p>
+          </article>
+          <article class="step reveal">
+            <h3>Size uygun sistemi planlıyoruz</h3>
+            <p>Gereksiz karmaşıklık eklemeden, işletmenize uygun otomasyon akışını çıkarıyoruz.</p>
+          </article>
+          <article class="step reveal">
+            <h3>Kurulum ve entegrasyonu yapıyoruz</h3>
+            <p>WhatsApp, Instagram, randevu veya takip süreçlerinizi plana göre bağlıyoruz.</p>
+          </article>
+          <article class="step reveal">
+            <h3>Test edip yayına alıyoruz</h3>
+            <p>Sistemi gerçek kullanım senaryolarıyla kontrol ediyor, yayına hazır hale getiriyoruz.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="audience-title">
+      <div class="container audience-wrap">
+        <div class="section-head reveal">
+          <h2 id="audience-title">Kimler için uygun?</h2>
+          <p>Ergene AI, özellikle müşteri iletişimi ve günlük operasyonlarında daha düzenli bir yapı kurmak isteyen küçük ve orta ölçekli işletmeler için uygundur.</p>
+        </div>
+
+        <ul class="audience-list">
+          <li class="reveal">Yoğun müşteri mesajı alan işletmeler</li>
+          <li class="reveal">Randevu sistemi kullanan işletmeler</li>
+          <li class="reveal">Lead takibini düzenlemek isteyen ekipler</li>
+          <li class="reveal">Tekrar eden işleri otomatikleştirmek isteyen firmalar</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section trust" aria-labelledby="trust-title">
+      <div class="container trust-band">
+        <div class="trust-copy reveal">
+          <h2 id="trust-title">İşletmenize özel, anlaşılır ve sürdürülebilir çözümler.</h2>
+          <p>Ergene AI olarak işletmelerin daha düzenli, hızlı ve verimli çalışmasına yardımcı olan AI otomasyon çözümleri sunuyoruz.</p>
+        </div>
+        <div class="trust-note reveal">Her kurulum işletmenizin akışına göre planlanır.</div>
+      </div>
+    </section>
+
+    <section class="cta" id="iletisim" aria-labelledby="contact-title">
+      <div class="container">
+        <div class="cta-panel reveal">
+          <div>
+            <h2 id="contact-title">İşletmeniz için doğru otomasyon yapısını birlikte kuralım.</h2>
+            <p>Kısa bir görüşmeyle ihtiyacınızı anlayalım, size uygun sade ve uygulanabilir otomasyon yapısını birlikte değerlendirelim.</p>
+            <div class="contact-meta" aria-label="İletişim bilgileri">
+              <a class="meta-link" href="tel:+905520947032">+90 552 094 7032</a>
+              <a class="meta-link" href="mailto:ergeneai@outlook.com">ergeneai@outlook.com</a>
+            </div>
+          </div>
+
+          <div class="contact-actions" aria-label="İletişim kanalları">
+            <a class="btn btn-primary" href="https://wa.me/905520947032" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a class="btn btn-secondary" href="https://instagram.com/ergeneai" target="_blank" rel="noopener noreferrer">Instagram</a>
+            <a class="btn btn-secondary" href="mailto:ergeneai@outlook.com">E-posta</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-brand">Ergene AI</div>
+        <div>İşletmeler için AI Otomasyon Çözümleri</div>
+      </div>
+      <nav class="footer-links" aria-label="Footer menü">
+        <a href="#ne-sunuyoruz">Ne Sunuyoruz</a>
+        <a href="#hizmetlerimiz">Hizmetlerimiz</a>
+        <a href="#surec">Süreç</a>
+        <a href="#iletisim">İletişim</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+
+    const menuButton = document.querySelector(".menu-toggle");
+    const mobileNav = document.querySelector("#mobile-nav");
+    const mobileLinks = mobileNav.querySelectorAll("a");
+
+    function setMenu(open) {
+      menuButton.setAttribute("aria-expanded", String(open));
+      menuButton.setAttribute("aria-label", open ? "Menüyü kapat" : "Menüyü aç");
+      mobileNav.dataset.open = String(open);
+      document.body.classList.toggle("menu-open", open);
+    }
+
+    menuButton.addEventListener("click", () => {
+      const isOpen = menuButton.getAttribute("aria-expanded") === "true";
+      setMenu(!isOpen);
+    });
+
+    mobileLinks.forEach((link) => {
+      link.addEventListener("click", () => setMenu(false));
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setMenu(false);
+      }
+    });
+
+    if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.body.classList.add("reveal-ready");
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+
+      document.querySelectorAll(".reveal").forEach((element) => observer.observe(element));
+    } else {
+      document.querySelectorAll(".reveal").forEach((element) => element.classList.add("is-visible"));
+    }
+
+    requestAnimationFrame(() => {
+      document.querySelectorAll(".hero .reveal").forEach((element) => element.classList.add("is-visible"));
+      document.body.classList.remove("no-js");
+    });
+  </script>
+
+<!-- ErgeneAI Chat Widget -->
+<div id="ergeneai-chat-widget" style="all:initial">
+<style>
+  #ergeneai-chat-widget * { margin:0; padding:0; box-sizing:border-box; font-family:Inter, -apple-system, system-ui, sans-serif; }
+  #ergeneai-chat-widget .eai-bubble {
+    position:fixed; bottom:24px; right:24px; z-index:999999;
+    width:56px; height:56px; border-radius:50%;
+    background:#81e36f; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 24px rgba(129,227,111,0.3);
+    transition:transform .2s, box-shadow .2s;
+  }
+  #ergeneai-chat-widget .eai-bubble:hover { transform:scale(1.08); box-shadow:0 8px 32px rgba(129,227,111,0.4); }
+  #ergeneai-chat-widget .eai-bubble svg { width:26px; height:26px; fill:#050807; }
+  #ergeneai-chat-widget .eai-bubble-close { display:none; }
+  #ergeneai-chat-widget .eai-bubble.open .eai-bubble-open { display:none; }
+  #ergeneai-chat-widget .eai-bubble.open .eai-bubble-close { display:block; }
+
+  #ergeneai-chat-widget .eai-panel {
+    position:fixed; bottom:92px; right:24px; z-index:999998;
+    width:360px; max-height:560px; height:70vh;
+    background:#0c1411; border:1px solid rgba(221,255,231,0.11);
+    border-radius:16px; box-shadow:0 24px 80px rgba(0,0,0,0.5);
+    display:none; flex-direction:column; overflow:hidden;
+  }
+  #ergeneai-chat-widget .eai-panel.open { display:flex; }
+
+  #ergeneai-chat-widget .eai-header {
+    padding:16px 18px; border-bottom:1px solid rgba(221,255,231,0.08);
+    display:flex; align-items:center; gap:10px;
+  }
+  #ergeneai-chat-widget .eai-avatar {
+    width:32px; height:32px; border-radius:50%; background:#81e36f;
+    display:flex; align-items:center; justify-content:center; color:#050807;
+    font-weight:800; font-size:14px;
+  }
+  #ergeneai-chat-widget .eai-header-text { flex:1; }
+  #ergeneai-chat-widget .eai-header-text strong { color:#f4f7f3; font-size:14px; }
+  #ergeneai-chat-widget .eai-header-text span { color:#aeb8b1; font-size:12px; }
+  #ergeneai-chat-widget .eai-header-close {
+    width:28px; height:28px; border:none; background:rgba(255,255,255,0.06);
+    border-radius:8px; color:#aeb8b1; cursor:pointer; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  #ergeneai-chat-widget .eai-messages {
+    flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px;
+  }
+  #ergeneai-chat-widget .eai-msg {
+    max-width:85%; padding:10px 14px; border-radius:12px;
+    font-size:13.5px; line-height:1.55; animation:fadeIn .25s;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  #ergeneai-chat-widget .eai-msg.bot {
+    align-self:flex-start; background:rgba(255,255,255,0.06); color:#f4f7f3;
+    border-bottom-left-radius:4px;
+  }
+  #ergeneai-chat-widget .eai-msg.user {
+    align-self:flex-end; background:#81e36f; color:#050807;
+    border-bottom-right-radius:4px;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing {
+    display:flex; gap:4px; padding:4px 0;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing span {
+    width:6px; height:6px; border-radius:50%; background:#aeb8b1;
+    animation:typing 1.2s infinite;
+  }
+  #ergeneai-chat-widget .eai-msg .eai-typing span:nth-child(2) { animation-delay:.2s; }
+  #ergeneai-chat-widget .eai-msg .eai-typing span:nth-child(3) { animation-delay:.4s; }
+  @keyframes typing { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  #ergeneai-chat-widget .eai-input-wrap {
+    padding:12px 14px; border-top:1px solid rgba(221,255,231,0.08);
+    display:flex; gap:8px;
+  }
+  #ergeneai-chat-widget .eai-input-wrap input {
+    flex:1; padding:10px 14px; border:1px solid rgba(221,255,231,0.12);
+    border-radius:10px; background:rgba(255,255,255,0.04); color:#f4f7f3;
+    font-size:13.5px; outline:none;
+  }
+  #ergeneai-chat-widget .eai-input-wrap input::placeholder { color:#738077; }
+  #ergeneai-chat-widget .eai-input-wrap input:focus { border-color:#81e36f; }
+  #ergeneai-chat-widget .eai-input-wrap button {
+    width:38px; height:38px; border:none; border-radius:10px;
+    background:#81e36f; color:#050807; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+    transition:background .2s;
+  }
+  #ergeneai-chat-widget .eai-input-wrap button:hover { background:#9af28a; }
+  #ergeneai-chat-widget .eai-input-wrap button:disabled { opacity:.4; cursor:default; }
+
+  @media (max-width:480px) {
+    #ergeneai-chat-widget .eai-panel { width:calc(100vw - 24px); right:12px; bottom:84px; height:65vh; }
+    #ergeneai-chat-widget .eai-bubble { bottom:16px; right:16px; }
+  }
+</style>
+
+<button class="eai-bubble" onclick="toggleChat()" aria-label="ErgeneAI asistan">
+  <svg class="eai-bubble-open" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+  <svg class="eai-bubble-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+</button>
+
+<div class="eai-panel" id="eai-panel">
+  <div class="eai-header">
+    <div class="eai-avatar">E</div>
+    <div class="eai-header-text">
+      <strong>ErgeneAI Asistan</strong>
+      <span>🟢 Çevrimiçi</span>
+    </div>
+    <button class="eai-header-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="eai-messages" id="eai-messages">
+    <div class="eai-msg bot">👋 Merhaba! Ben ErgeneAI asistanıyım. İşletmenize nasıl bir otomasyon çözümü arıyorsunuz?</div>
+  </div>
+  <div class="eai-input-wrap">
+    <input type="text" id="eai-input" placeholder="Mesajınızı yazın..." onkeydown="if(event.key==='Enter') sendMsg()">
+    <button id="eai-send-btn" onclick="sendMsg()">➤</button>
+  </div>
+</div>
+
+<script>
+const API_URL = 'https://ergeneai.com/api/chat';
+let msgId = 0;
+
+function toggleChat() {
+  const bubble = document.querySelector('#ergeneai-chat-widget .eai-bubble');
+  const panel = document.getElementById('eai-panel');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  bubble.classList.toggle('open');
+  if (!isOpen) setTimeout(() => document.getElementById('eai-input').focus(), 300);
+}
+
+function addMsg(text, role) {
+  const msgs = document.getElementById('eai-messages');
+  const div = document.createElement('div');
+  div.className = 'eai-msg ' + role;
+  div.id = 'msg-' + (++msgId);
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('eai-messages');
+  const div = document.createElement('div');
+  div.className = 'eai-msg bot';
+  div.id = 'eai-typing';
+  div.innerHTML = '<div class="eai-typing"><span></span><span></span><span></span></div>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hideTyping() {
+  const el = document.getElementById('eai-typing');
+  if (el) el.remove();
+}
+
+async function sendMsg() {
+  const input = document.getElementById('eai-input');
+  const btn = document.getElementById('eai-send-btn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  btn.disabled = true;
+  addMsg(text, 'user');
+  showTyping();
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    hideTyping();
+    if (!res.ok) { addMsg('Bağlantı hatası. Lütfen daha sonra tekrar deneyin.', 'bot'); return; }
+    const data = await res.json();
+    addMsg(data.reply || data.message || 'Yanıt alınamadı.', 'bot');
+  } catch(e) {
+    hideTyping();
+    addMsg('Bağlantı hatası. Lütfen daha sonra tekrar deneyin.', 'bot');
+  }
+  btn.disabled = false;
+}
+</script>
+</div>
+
+</body>
+</html>
